@@ -27,10 +27,16 @@ p_SC  = {"A":10.0, "B":10.0} #additional lap time for driver A/B due to a pit st
 g1 = -0.4
 
 # gap discretization
-g_min = -35.0
-g_max = 35.0
-g_step = 0.04
+# g_min = -35.0
+# g_max = 35.0
+# g_step = 0.04
+# g_values = np.arange(g_min, g_max + g_step, g_step)
+
+g_min = -4
+g_max = 4
+g_step = 2.0        # VERY coarse → only 5 values
 g_values = np.arange(g_min, g_max + g_step, g_step)
+
 
 # Stochastic yellow flag 
 l_VSC = 2 # Laps that last a VSC
@@ -256,15 +262,17 @@ def V_end(tire_A, wA, mA, tire_B, wB, mB, g):
                                             states.append((tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_DRS))
     return states
 
-def generate_states(n):
+def generate_states():
     states = []
     max_y_DRS = max(k_VSC + l_VSC, k_SC + l_SC)
 
     for tire_A in T:
         for tire_B in T:
 
-            for wA in range(1, u[tire_A - 1] + 2):
-                for wB in range(1, u[tire_B - 1] + 2):
+            # for wA in range(1, u[tire_A - 1] + 2):
+            for wA in range(u[tire_A - 1] + 2):
+                # for wB in range(1, u[tire_B - 1] + 2):
+                for wB in range(u[tire_B - 1] + 2):
 
                     for mA in range(2):
                         for mB in range(2):
