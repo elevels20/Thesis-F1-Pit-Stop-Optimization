@@ -313,7 +313,7 @@ def solve_SDP():
 
     for n in range(N, 0, -1):
         V_new = {}
-        states = generate_states(n)
+        states = generate_states()
         for state in states:
             tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_DRS = state
 
