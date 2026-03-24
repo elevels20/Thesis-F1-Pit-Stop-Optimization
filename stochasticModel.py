@@ -241,7 +241,7 @@ def V_end(tire_A, wA, mA, tire_B, wB, mB, g):
         return 0
 
 # state = (tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_DRS)
-def generate_states(n):
+# def generate_states(n):
     states = []
     for tire_A in T:
         for tire_B in T:
@@ -254,6 +254,40 @@ def generate_states(n):
                                     for y_SC in range(l_SC + 1):
                                         for y_DRS in range(N - n + 1):
                                             states.append((tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_DRS))
+    return states
+
+def generate_states(n):
+    states = []
+    max_y_DRS = max(k_VSC + l_VSC, k_SC + l_SC)
+
+    for tire_A in T:
+        for tire_B in T:
+
+            for wA in range(1, u[tire_A - 1] + 2):
+                for wB in range(1, u[tire_B - 1] + 2):
+
+                    for mA in range(2):
+                        for mB in range(2):
+
+                            for g in g_values:
+
+                                for y_VSC in range(l_VSC + 1):
+                                    for y_SC in range(l_SC + 1):
+
+                                        # Eliminate invalid combos
+                                        if y_VSC > 0 and y_SC > 0:
+                                            continue
+
+                                        for y_DRS in range(max_y_DRS + 1):
+
+                                            states.append((
+                                                tire_A, wA, mA,
+                                                tire_B, wB, mB,
+                                                g,
+                                                y_VSC, y_SC,
+                                                y_DRS
+                                            ))
+
     return states
 
 # Stochastic Dynamic Programming Algorithm
