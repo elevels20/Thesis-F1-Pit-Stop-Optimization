@@ -379,3 +379,15 @@ def solve_SDP():
     pi_A = resA.x[:-1]
 
     return U, pi_A, pi_B
+
+# Run
+U, pi_A, pi_B = solve_SDP()
+
+print(f"Payoff matrix U': \n{U}")
+print(f"π^A (mixed strategy): \n{pi_A}")
+print(f"π^B (mixed strategy):\n{pi_B}")
+
+if __name__ == '__main__':
+    # V, xA, xB = solve_algorithm1()
+    print('Solved Algorithm 1')
+    # print('Number of states:', len(V))
