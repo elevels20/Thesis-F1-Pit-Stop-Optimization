@@ -3,13 +3,16 @@ from scipy.optimize import linprog
 import math
 
 # PARAMETERS
-N = 52 # Number of laps 
+N = 5 # Number of laps 
 T = [1, 2, 3] # Tire compounds. 1 = Soft, 2 = Medium, 3 = Hard
 T0 = [0] + T # 0 = no pit stop
 
-u1 = 30 # Lifespan in number of laps for Soft tires
-u2 = 40 # Lifespan in number of laps for Medium tires
-u3 = 50 # Lifespan in number of laps for Hard tires
+# u1 = 30 # Lifespan in number of laps for Soft tires
+# u2 = 40 # Lifespan in number of laps for Medium tires
+# u3 = 50 # Lifespan in number of laps for Hard tires
+u1 = 3
+u2 = 4
+u3 = 5
 u = [u1, u2, u3]
 
 d0 = {"A":97.22, "B":97.24} # Lap time for driver A/B when using new soft compound tires at the beginning of the race (without pit stops, interactions, or DRS)
@@ -37,15 +40,9 @@ g_max = 4
 g_step = 2.0        # VERY coarse → only 5 values
 g_values = np.arange(g_min, g_max + g_step, g_step)
 
-
 # Stochastic yellow flag 
 l_VSC = 2 # Laps that last a VSC
 l_SC = 3 # Laps that last a SC
-
-# Probability of having a VSC during a race is 0.3
-# probability of having a SC during a race is 0.47
-# q_VSC = 0.3 / N # Probability of having a VSC during a lab
-# q_SC = 0.47 / N # Probability of having a VSC during a lab
 
 r_VSC = 0.3 # Probability of having at least one VSC during the race
 r_SC = 0.3 # Probability of having at least one SC during the race
@@ -59,12 +56,19 @@ k_VSC = 2 # Number of laps needed to be raced after the end of a VSC to enable t
 k_SC = 2 # Number of laps needed to be raced after the end of a SC to enable the DRS
 
 # RANDOM VARIABLES
-Z1_vals = [0.2, 0.4, 0.6] 
-Z2_vals = [0.5, 0.7, 0.9]
-Z_prob = [1/3, 1/3, 1/3]
+# Z1_vals = [0.2, 0.4, 0.6] 
+# Z2_vals = [0.5, 0.7, 0.9]
+# Z_prob = [1/3, 1/3, 1/3]
 
-TDRS_vals = [0.1, 0.3, 0.5]
-TDRS_prob = [0.2, 0.7, 0.1]
+# TDRS_vals = [0.1, 0.3, 0.5]
+# TDRS_prob = [0.2, 0.7, 0.1]
+
+Z1_vals = [0.4]
+Z2_vals = [0.7]
+Z_prob = [1.0]
+
+TDRS_vals = [0.3]
+TDRS_prob = [1.0]
 
 # state = (tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_DRS)
 
@@ -247,20 +251,6 @@ def V_end(tire_A, wA, mA, tire_B, wB, mB, g):
         return 0
 
 # state = (tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_DRS)
-# def generate_states(n):
-    states = []
-    for tire_A in T:
-        for tire_B in T:
-            for wA in range(u[tire_A - 1] + 2):
-                for wB in range(u[tire_B - 1] + 2):
-                    for mA in range(2):
-                        for mB in range(2):
-                            for g in g_values:
-                                for y_VSC in range(l_VSC + 1):
-                                    for y_SC in range(l_SC + 1):
-                                        for y_DRS in range(N - n + 1):
-                                            states.append((tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_DRS))
-    return states
 
 def generate_states():
     states = []
@@ -301,7 +291,7 @@ def generate_states():
 # Stochastic Dynamic Programming Algorithm
 def solve_SDP():
     # Step 3: Compute 𝑉 ′^{*} _N+1(s_n) for all s_n ∈ S_N+1
-    states_final = generate_states(N + 1) # S_n+1
+    states_final = generate_states() # S_n+1
     V = {state: 0 for state in states_final}
     for state in states_final:
         tire_A, wA, mA, tire_B, wB, mB, g, _, _, _ = state
@@ -313,7 +303,7 @@ def solve_SDP():
 
     for n in range(N, 0, -1):
         V_new = {}
-        states = generate_states()
+        states = states_final
         for state in states:
             tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_DRS = state
 
@@ -363,15 +353,17 @@ def solve_SDP():
         V = V_new
     # return V, xA_star, xB_star
 
-    T_list = list(T0)
+    T_list = list(T)
     nT = len(T_list)
 
     # Step 15: build payoff matrix U'
     U = np.zeros((nT, nT))
 
+    g_init = discretize_gap(g1)
+
     for i, tA in enumerate(T_list):
         for j, tB in enumerate(T_list):
-            s1 = (tA, 0, 0, tB, 0, 0, g1, 0, 0, 2)
+            s1 = (tA, 0, 0, tB, 0, 0, g_init, 0, 0, 2)
             U[i, j] = V[s1]
 
     # Step 16: solve zero-sum game via LP   
@@ -420,16 +412,111 @@ def solve_SDP():
 
     pi_A = resA.x[:-1]
 
-    return U, pi_A, pi_B
+    return U, pi_A, pi_B, xA_star, xB_star
 
 # Run
-U, pi_A, pi_B = solve_SDP()
+# U, pi_A, pi_B = solve_SDP()
 
-print(f"Payoff matrix U': \n{U}")
-print(f"π^A (mixed strategy): \n{pi_A}")
-print(f"π^B (mixed strategy):\n{pi_B}")
+# print(f"Payoff matrix U': \n{U}")
+# print(f"π^A (mixed strategy): \n{pi_A}")
+# print(f"π^B (mixed strategy):\n{pi_B}")
 
-if __name__ == '__main__':
+# if __name__ == '__main__':
     # V, xA, xB = solve_algorithm1()
-    print('Solved Algorithm 1')
+    # print('Solved Algorithm 1')
     # print('Number of states:', len(V))
+
+def simulate_race(pi_A, pi_B, xA_star, xB_star):
+    # Initial state
+    tA = np.random.choice(T, p=pi_A)
+    tB = np.random.choice(T, p=pi_B)
+
+    g = discretize_gap(g1)
+
+    state = (tA, 0, 0, tB, 0, 0, g, 0, 0, 2)
+
+    # Simulate laps
+    for n in range(1, N + 1):
+
+        tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_DRS = state
+
+        # Optimal decisions from SDP
+        a = xA_star[(n, state)]
+        b = xB_star[(n, state)]
+
+        # Sample stochastic variables
+        z1 = np.random.choice(Z1_vals, p=Z_prob)
+        z2 = np.random.choice(Z2_vals, p=Z_prob)
+        t_DRS = np.random.choice(TDRS_vals, p=TDRS_prob)
+
+        # Sample yellow flag transition
+        transitions = yellow_transitions(y_VSC, y_SC)
+        probs = [p for (_, p) in transitions]
+        idx = np.random.choice(len(transitions), p=probs)
+        (y_VSC_n, y_SC_n), _ = transitions[idx]
+
+        # Compute next state
+        state = state_next(
+            tire_A, wA, mA,
+            tire_B, wB, mB,
+            g,
+            y_VSC, y_SC,
+            y_VSC_n, y_SC_n,
+            y_DRS,
+            n,
+            a, b,
+            z1, z2, t_DRS
+        )
+
+    # Final outcome
+    final_gap = state[6]
+
+    if final_gap < 0:
+        winner = "A"
+    elif final_gap > 0:
+        winner = "B"
+    else:
+        winner = "tie"
+
+    return final_gap, winner
+
+def run_simulations(U, pi_A, pi_B, xA_star, xB_star, n_sim=10000):
+    results = []
+
+    for _ in range(n_sim):
+        g_final, winner = simulate_race(pi_A, pi_B, xA_star, xB_star)
+        results.append((g_final, winner))
+
+    gaps = np.array([r[0] for r in results])
+    winners = [r[1] for r in results]
+
+    # Probabilities
+    p_A_win = np.mean([w == "A" for w in winners])
+    p_B_win = np.mean([w == "B" for w in winners])
+    p_tie = np.mean([w == "tie" for w in winners])
+
+    # Unconditional stats
+    mean_gap = np.mean(gaps)
+    std_gap = np.std(gaps)
+
+    # Conditional stats
+    gaps_A_win = gaps[gaps < 0]
+    gaps_B_win = gaps[gaps > 0]
+
+    mean_A_win = np.mean(gaps_A_win) if len(gaps_A_win) > 0 else 0
+    mean_B_win = np.mean(gaps_B_win) if len(gaps_B_win) > 0 else 0
+
+    std_A_win = np.std(gaps_A_win) if len(gaps_A_win) > 0 else 0
+    std_B_win = np.std(gaps_B_win) if len(gaps_B_win) > 0 else 0
+
+    return {
+        "P(A wins)": p_A_win,
+        "P(B wins)": p_B_win,
+        "P(tie)": p_tie,
+        "Mean gap": mean_gap,
+        "Std gap": std_gap,
+        "Mean gap | A wins": mean_A_win,
+        "Mean gap | B wins": mean_B_win,
+        "Std gap | A wins": std_A_win,
+        "Std gap | B wins": std_B_win,
+    }
