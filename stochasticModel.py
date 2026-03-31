@@ -104,13 +104,13 @@ def lap_time_SC(g, driver, pitA, pitB):
     xi = 1 if (g + p_SC["A"] * IA - p_SC["B"] * IB) < 0 else 0
 
     if driver == "A":
-        if xi == 1:
+        if xi == 1:  # Driver A ends up ahead of B after the pit stop exit of a particular lap
             lap_time = d_SC + p_SC["A"] * IA
         else:
-            lap_time = d_SC + p_SC["B"] * IA - g + 0.5
+            lap_time = d_SC + p_SC["A"] * IA - g + 0.5 # lap_time = d_SC + p_SC["B"] * IA - g + 0.5
     else:
         if xi == 1:
-            lap_time = d_SC + p_SC["A"] * IB + g + 0.5
+            lap_time = d_SC + p_SC["B"] * IB + g + 0.5 # lap_time = d_SC + p_SC["A"] * IB + g + 0.5
         else:
             lap_time = d_SC + p_SC["B"] * IB
 
