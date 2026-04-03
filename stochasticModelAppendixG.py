@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy.optimize import linprog
 import math
 
@@ -34,6 +35,7 @@ p_SC  = {"A":10.0, "B":10.0} #additional lap time for driver A/B due to a pit st
 delta = 0.4 # Minimum time difference between drivers at the pit stop exit 
 
 g1 = -0.4
+# g1 = -2.0
 
 # gap discretization
 # g_min = -35.0
@@ -41,9 +43,14 @@ g1 = -0.4
 # g_step = 0.04
 # g_values = np.arange(g_min, g_max + g_step, g_step)
 
-g_min = -4
-g_max = 4
-g_step = 2.0        
+# g_min = -4
+# g_max = 4
+# g_step = 2.0        
+# g_values = np.arange(g_min, g_max + g_step, g_step)
+
+g_min = -2
+g_max = 2
+g_step = 0.4        
 g_values = np.arange(g_min, g_max + g_step, g_step)
 
 l_VSC = 2 # Laps that last a VSC
@@ -61,19 +68,19 @@ k_VSC = 2 # Number of laps needed to be raced after the end of a VSC to enable t
 k_SC = 2 # Number of laps needed to be raced after the end of a SC to enable the DRS
 
 # RANDOM VARIABLES
-# Z1_vals = [0.2, 0.4, 0.6] 
-# Z2_vals = [0.5, 0.7, 0.9]
-# Z_prob = [1/3, 1/3, 1/3]
+Z1_vals = [0.2, 0.4, 0.6] 
+Z2_vals = [0.5, 0.7, 0.9]
+Z_prob = [1/3, 1/3, 1/3]
 
-# TDRS_vals = [0.1, 0.3, 0.5]
-# TDRS_prob = [0.2, 0.7, 0.1]
+TDRS_vals = [0.1, 0.3, 0.5]
+TDRS_prob = [0.2, 0.7, 0.1]
 
-Z1_vals = [0.2, 0.4]
-Z2_vals = [0.5, 0.7]
-Z_prob = [1/2, 1/2]
+# Z1_vals = [0.2, 0.4]
+# Z2_vals = [0.5, 0.7]
+# Z_prob = [1/2, 1/2]
 
-TDRS_vals = [0.1, 0.3]
-TDRS_prob = [0.22, 0.78]
+# TDRS_vals = [0.1, 0.3]
+# TDRS_prob = [0.22, 0.78]
 
 # state = (tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_DRS)
 
@@ -316,6 +323,16 @@ def solve_SDP():
     xA_star = {}
     xB_star = {}
 
+    RV_combinations = []
+
+    for t_DRS, p_DRS in zip(TDRS_vals, TDRS_prob):
+        for z1, p_z1 in zip(Z1_vals, Z_prob):
+            for z2, p_z2 in zip(Z2_vals, Z_prob):
+                prob = p_DRS * p_z1 * p_z2
+                RV_combinations.append((z1, z2, t_DRS, prob))
+
+    # state_next_cache = {}
+
     for n in range(N, 0, -1):
         V_new = {}
         states = generate_states(n)
@@ -328,14 +345,18 @@ def solve_SDP():
                 for b in T0:
                     val = 0
 
-                    for t_DRS, p_DRS in zip(TDRS_vals, TDRS_prob):
-                        for z1, p_z1 in zip(Z1_vals, Z_prob):
-                            for z2, p_z2 in zip(Z2_vals, Z_prob):
-                                for (y_VSC_n, y_SC_n), p_y in yellow_transitions(y_VSC, y_SC):
-                                    state_n = state_next(tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_VSC_n, y_SC_n, y_DRS, n, a, b, z1, z2, t_DRS)
+                    for (z1, z2, t_DRS, p_rv) in RV_combinations:
+                        for (y_VSC_n, y_SC_n), p_y in yellow_transitions(y_VSC, y_SC):
+                            # key = (tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_VSC_n, y_SC_n, y_DRS, n, a, b, z1, z2, t_DRS)
+                            state_n = state_next(tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_VSC_n, y_SC_n, y_DRS, n, a, b, z1, z2, t_DRS)
 
-                                    prob = p_DRS * p_z1 * p_z2 * p_y
-                                    val += prob * V[state_n]                                    
+                            # if key not in state_next_cache:
+                                # state_next_cache[key] = state_next(tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_VSC_n, y_SC_n, y_DRS, n, a, b, z1, z2, t_DRS)
+                            
+                            # state_n = state_next_cache[key]
+
+                            prob = p_rv * p_y
+                            val += prob * V[state_n]                                    
 
                     V_prime[(a, b)] = val
 
@@ -450,6 +471,11 @@ def simulate_race(pi_A, pi_B, xA_star, xB_star):
 
     state = (tA, 0, 0, tB, 0, 0, g, 0, 0, 2)
 
+    history = []
+    gap_history = []
+    yellow_history = []
+    pit_history = []
+
     # Simulate laps
     for n in range(1, N + 1):
 
@@ -458,6 +484,14 @@ def simulate_race(pi_A, pi_B, xA_star, xB_star):
         # Optimal decisions from SDP
         a = xA_star[(n, state)]
         b = xB_star[(n, state)]
+
+        pitA = (a != 0)
+        pitB = (b != 0)
+
+        history.append((n, tire_A, tire_B))
+        gap_history.append(g)
+        yellow_history.append((y_VSC, y_SC))
+        pit_history.append((pitA, pitB, a, b))
 
         # Sample stochastic variables
         z1 = np.random.choice(Z1_vals, p=Z_prob)
@@ -493,13 +527,13 @@ def simulate_race(pi_A, pi_B, xA_star, xB_star):
     else:
         winner = "tie"
 
-    return final_gap, winner
+    return final_gap, winner, history, gap_history, yellow_history, pit_history
 
 def run_simulations(U, pi_A, pi_B, xA_star, xB_star, n_sim=10000):
     results = []
 
     for _ in range(n_sim):
-        g_final, winner = simulate_race(pi_A, pi_B, xA_star, xB_star)
+        g_final, winner, _, _, _, _ = simulate_race(pi_A, pi_B, xA_star, xB_star)
         results.append((g_final, winner))
 
     gaps = np.array([r[0] for r in results])
@@ -535,3 +569,98 @@ def run_simulations(U, pi_A, pi_B, xA_star, xB_star, n_sim=10000):
         "Std gap | A wins": std_A_win,
         "Std gap | B wins": std_B_win,
     }
+
+def plot_sample_path(history, gap_history, yellow_history, pit_history):
+
+    laps = [h[0] for h in history]
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
+
+    # TOP: pit strategy
+    # horizontal dashed lines
+    ax1.hlines(1, 1, N, linestyles='dashed')
+    ax1.hlines(0, 1, N, linestyles='dashed')
+
+    # color mapping
+    tire_colors = {
+        1: "red",      # Soft
+        2: "orange",   # Medium
+        3: "black"     # Hard (if used)
+    }
+
+    for i, lap in enumerate(laps):
+        pitA, pitB, a, b = pit_history[i]
+
+        # Only plot when pit happens OR first lap
+        # Driver A
+        if i == 0 or pitA:
+            tire_label = history[i][1] if not pitA else a
+            color = tire_colors[tire_label]
+            
+            ax1.scatter(lap, 1, s=120, color=color)
+            ax1.text(lap, 1, 
+                     "S" if tire_label == 1 else ("M" if tire_label == 2 else "H"),
+                     ha='center', va='center', fontsize=9, color='white')
+
+        # Driver B
+        if i == 0 or pitB:
+            tire_label = history[i][2] if not pitB else b
+            color = tire_colors[tire_label]
+
+            ax1.scatter(lap, 0, s=120, color=color)
+            ax1.text(lap, 0, 
+                     "S" if tire_label == 1 else ("M" if tire_label == 2 else "H"),
+                     ha='center', va='center', fontsize=9, color='white')
+
+    ax1.set_yticks([0, 1])
+    ax1.set_yticklabels(["B", "A"])
+    ax1.set_title("Race strategy")
+
+    # BOTTOM: gap
+    ax2.plot(laps, gap_history, linewidth=2)
+
+     # Merge consecutive yellow flags into one block
+    start_idx = None
+    current_flag = 0  # 0 = none, 1 = VSC, 2 = SC
+
+    for i, (yV, yS) in enumerate(yellow_history + [(0, 0)]):  # append dummy to flush last block
+        flag = 1 if yV > 0 else (2 if yS > 0 else 0)
+
+        if flag != current_flag:
+            if current_flag != 0:
+                # Plot the previous block
+                color = 'yellow' if current_flag == 1 else 'orange'
+                ax2.axvspan(laps[start_idx], laps[i-1]+1, alpha=0.3, color=color)
+                # Label in the middle of the block
+                ax2.text((laps[start_idx] + laps[i-1]+1)/2, max(gap_history)*0.95, 
+                         "VSC" if current_flag == 1 else "SC",
+                         ha='center', va='top', fontsize=9, color='black', rotation=90)
+            # start new block
+            start_idx = i
+            current_flag = flag
+            
+    ax2.axhline(0, linestyle='--')
+    ax2.set_xlabel("Lap")
+    ax2.set_ylabel("Time Difference [s]")
+
+    plt.tight_layout()
+    plt.show()
+    
+def get_sample_no_yellow(pi_A, pi_B, xA_star, xB_star):
+    while True:
+        _, _, h, g, y, p = simulate_race(pi_A, pi_B, xA_star, xB_star)
+        if all(yV == 0 and yS == 0 for (yV, yS) in y):
+            return h, g, y, p
+
+# def get_sample_with_VSC(pi_A, pi_B, xA_star, xB_star):
+    # while True:
+        # _, _, h, g, y, p = simulate_race(pi_A, pi_B, xA_star, xB_star)
+        # if any(yV > 0 for (yV, yS) in y):
+            # return h, g, y, p
+        
+def get_sample_with_yellow(pi_A, pi_B, xA_star, xB_star):
+    while True:
+        _, _, h, g, y, p = simulate_race(pi_A, pi_B, xA_star, xB_star)
+        # Check for any yellow flag (VSC or SC)
+        if any(yV > 0 or yS > 0 for (yV, yS) in y):
+            return h, g, y, p
