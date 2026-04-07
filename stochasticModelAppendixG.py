@@ -4,7 +4,7 @@ from scipy.optimize import linprog
 import math
 
 # PARAMETERS
-N = 5 # Number of laps 
+N = 26 # Number of laps 
 # T = [1, 2, 3] # Tire compounds. 1 = Soft, 2 = Medium, 3 = Hard
 T = [1, 2]
 T0 = [0] + T # 0 = no pit stop
@@ -12,10 +12,10 @@ T0 = [0] + T # 0 = no pit stop
 # u1 = 30 # Lifespan in number of laps for Soft tires
 # u2 = 40 # Lifespan in number of laps for Medium tires
 # u3 = 50 # Lifespan in number of laps for Hard tires
-# u1 = 15
-# u2 = 25
-u1 = 3
-u2 = 4
+u1 = 15
+u2 = 25
+# u1 = 3
+# u2 = 4
 # u3 = 5
 # u = [u1, u2, u3]
 u = [u1, u2]
@@ -68,12 +68,12 @@ k_VSC = 2 # Number of laps needed to be raced after the end of a VSC to enable t
 k_SC = 2 # Number of laps needed to be raced after the end of a SC to enable the DRS
 
 # RANDOM VARIABLES
-# Z1_vals = [0.2, 0.4, 0.6] 
-# Z2_vals = [0.5, 0.7, 0.9]
-# Z_prob = [1/3, 1/3, 1/3]
+Z1_vals = [0.2, 0.4, 0.6] 
+Z2_vals = [0.5, 0.7, 0.9]
+Z_prob = [1/3, 1/3, 1/3]
 
-# TDRS_vals = [0.1, 0.3, 0.5]
-# TDRS_prob = [0.2, 0.7, 0.1]
+TDRS_vals = [0.1, 0.3, 0.5]
+TDRS_prob = [0.2, 0.7, 0.1]
 
 # Z1_vals = [0.2, 0.4]
 # Z2_vals = [0.5, 0.7]
@@ -82,12 +82,12 @@ k_SC = 2 # Number of laps needed to be raced after the end of a SC to enable the
 # TDRS_vals = [0.1, 0.3]
 # TDRS_prob = [0.22, 0.78]
 
-Z1_vals = [0.4]
-Z2_vals = [0.7]
-Z_prob = [1.0]
+# Z1_vals = [0.4]
+# Z2_vals = [0.7]
+# Z_prob = [1.0]
 
-TDRS_vals = [0.3]
-TDRS_prob = [1.0]
+# TDRS_vals = [0.3]
+# TDRS_prob = [1.0]
 
 # state = (tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_DRS)
 
@@ -338,8 +338,6 @@ def solve_SDP():
                 prob = p_DRS * p_z1 * p_z2
                 RV_combinations.append((z1, z2, t_DRS, prob))
 
-    # state_next_cache = {}
-
     for n in range(N, 0, -1):
         if n == 1 or n == N:  # No pit in lap 1 or N
             T_allowed = [0]
@@ -351,7 +349,7 @@ def solve_SDP():
         for state in states:
             tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_DRS = state
 
-            # Step 6: compute V'_n(s,a,b) for all a, b ∈ T0.
+            # Step 6: compute V'_n(s,a,b) for all a, b ∈ T_allowed.
             V_prime = {}
             for a in T_allowed:
                 for b in T_allowed:
@@ -367,7 +365,7 @@ def solve_SDP():
                     V_prime[(a, b)] = val
 
             if g < 0: # A is leader (minimize g)
-                # Step 8: compute x_n^{B*}(s,a) for all a ∈ T0.
+                # Step 8: compute x_n^{B*}(s,a) for all a ∈ T_allowed.
                 b_star = {a: max(T_allowed, key=lambda b: V_prime[(a, b)]) for a in T_allowed}
 
                 # Step 9: compute x_n^{A*}(s)
@@ -380,7 +378,7 @@ def solve_SDP():
                 xB_star[(n, state)] = b_star[a_star]
             
             else: # B is leader (maximize g)
-                # Step 12: compute x_n^{A*}(s,b) for all b ∈ T0.
+                # Step 12: compute x_n^{A*}(s,b) for all b ∈ T_allowed.
                 a_star = {b: min(T_allowed, key=lambda a: V_prime[(a, b)]) for b in T_allowed}
 
                 # Step 13: compute x_n^{B*}(s)
@@ -395,16 +393,15 @@ def solve_SDP():
         V = V_new
     # return V, xA_star, xB_star
 
-    T_list = list(T)
-    nT = len(T_list)
+    nT = len(T)
 
     # Step 15: build payoff matrix U'
     U = np.zeros((nT, nT))
 
     g_init = discretize_gap(g1)
 
-    for i, tA in enumerate(T_list):
-        for j, tB in enumerate(T_list):
+    for i, tA in enumerate(T):
+        for j, tB in enumerate(T):
             s1 = (tA, 0, 0, tB, 0, 0, g_init, 0, 0, 2)
             U[i, j] = V[s1]
 
@@ -621,6 +618,7 @@ def plot_sample_path(history, gap_history, yellow_history, pit_history):
     ax1.set_yticks([0, 1])
     ax1.set_yticklabels(["B", "A"])
     ax1.set_title("Race strategy")
+    ax1.set_ylabel("Player")
 
     # BOTTOM: gap
     ax2.plot(laps, gap_history, linewidth=2)
@@ -653,6 +651,7 @@ def plot_sample_path(history, gap_history, yellow_history, pit_history):
     ax2.axhline(0, linestyle='--')
     ax2.set_xlabel("Lap")
     ax2.set_ylabel("Time Difference [s]")
+    ax2.set_title("Partial Race Time Difference")
 
     plt.tight_layout()
     plt.show()
