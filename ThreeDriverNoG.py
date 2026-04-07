@@ -1,20 +1,24 @@
 # NO APPENDIX G!!!
 import numpy as np
+import matplotlib.pyplot as plt
+import itertools
 from scipy.optimize import linprog
 import math
 
 # PARAMETERS
-N = 5 # Number of laps 
-T = [1, 2, 3] # Tire compounds. 1 = Soft, 2 = Medium, 3 = Hard
+N = 3 # Number of laps 
+# T = [1, 2, 3] # Tire compounds. 1 = Soft, 2 = Medium, 3 = Hard
+T = [1, 2] 
+T_cartesian = list(itertools.product(T, T))
 T0 = [0] + T # 0 = no pit stop
 
 # u1 = 30 # Lifespan in number of laps for Soft tires
 # u2 = 40 # Lifespan in number of laps for Medium tires
 # u3 = 50 # Lifespan in number of laps for Hard tires
-u1 = 3
-u2 = 4
-u3 = 5
-u = [u1, u2, u3]
+u1 = 1
+u2 = 2
+# u3 = 5
+u = [u1, u2]
 
 d0 = {"A":97.22, "B":97.24, "C": 97.20} # Lap time for driver A/B/C when using new soft compound tires at the beginning of the race (without pit stops, interactions, or DRS)
 p0 = {"A":20.2, "B":20.0, "C": 20.4} # Additional lap time for driver A/B/C due to a pit stop
@@ -29,17 +33,13 @@ p_VSC = {"A":10.0, "B":10.0, "C": 10.0} # Additional lap time for driver A/B/C d
 p_SC  = {"A":10.0, "B":10.0, "C": 10.0} #additional lap time for driver A/B/C due to a pit stop under SC
 
 g_AB1 = -0.4 # Initial time gap between A and B
-g_AC1 = -0.08 # Initial time gap between A and C
+g_AC1 = -0.8 # Initial time gap between A and C
 
 # gap discretization
-# g_min = -35.0
-# g_max = 35.0
-# g_step = 0.04
-# g_values = np.arange(g_min, g_max + g_step, g_step)
-
-g_min = -4
-g_max = 4
-g_step = 2.0      
+g_min = -2
+g_max = 2
+# g_step = 0.4        
+g_step = 1        
 g_values = np.arange(g_min, g_max + g_step, g_step)
 
 # Stochastic yellow flag 
@@ -350,21 +350,28 @@ def H(w, u, m):
     """
     return w <= u and m == 1
 
-def V_end(tire_A, wA, mA, tire_B, wB, mB, g):
+def V_end(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC):
     Ha = H(wA, u[tire_A - 1], mA)
     Hb = H(wB, u[tire_B - 1], mB)
+    Hc = H(wC, u[tire_C - 1], mC)
 
     if Ha:
         if Hb:
-            return g
+            if Hc:
+                return max(g_AB, g_AC)
+            else:
+                return g_AB
         else:
-            return - math.inf
-    elif Hb:
-        return math.inf
-    else:
+            if Hc:
+                return g_AC
+            else:
+                return - math.inf
+    elif (not Ha) and (not Hb) and (not Hc):
         return 0
+    else:
+        return math.inf
 
-# state = (tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_DRS)
+# state = (tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC, y_VSC, y_SC, y_DRS)
 
 def generate_states(n):
     states = []
@@ -372,41 +379,48 @@ def generate_states(n):
 
     for tire_A in T:
         for tire_B in T:
+            for tire_C in T:
 
-            # for wA in range(1, u[tire_A - 1] + 2):
-            for wA in range(u[tire_A - 1] + 2):
-                if wA > n: # tire wear cannot be higher than current lap
-                    continue
-                # for wB in range(1, u[tire_B - 1] + 2):
-                for wB in range(u[tire_B - 1] + 2):
-                    if wB > n: # tire wear cannot be higher than current lap
+                for wA in range(u[tire_A - 1] + 2):
+                    if wA > n: # tire wear cannot be higher than current lap
                         continue
-
-                    for mA in range(2):
-                        if mA == 1 and n == 1: # mA = 1 only if pit happened in a previous lap, this cannot hapen in the first lap
+                    for wB in range(u[tire_B - 1] + 2):
+                        if wB > n: # tire wear cannot be higher than current lap
                             continue
-                        for mB in range(2):
-                            if mB == 1 and n == 1: # mB = 1 only if pit happened in a previous lap, this cannot hapen in the first lap
+                        for wC in range(u[tire_C - 1] + 2):
+                            if wC > n: # tire wear cannot be higher than current lap
                                 continue
 
-                            for g in g_values:
-
-                                for y_VSC in range(l_VSC + 1):
-                                    for y_SC in range(l_SC + 1):
-
-                                        # Eliminate invalid combos
-                                        if y_VSC > 0 and y_SC > 0:
+                            for mA in range(2):
+                                if mA == 1 and n == 1: # mA = 1 only if pit happened in a previous lap, this cannot hapen in the first lap
+                                    continue
+                                for mB in range(2):
+                                    if mB == 1 and n == 1: # mB = 1 only if pit happened in a previous lap, this cannot hapen in the first lap
+                                        continue
+                                    for mC in range(2):
+                                        if mC == 1 and n == 1: # mC = 1 only if pit happened in a previous lap, this cannot hapen in the first lap
                                             continue
 
-                                        for y_DRS in range(max_y_DRS + 1):
+                                        for g_AB in g_values:
+                                            for g_AC in g_values:
 
-                                            states.append((
-                                                tire_A, wA, mA,
-                                                tire_B, wB, mB,
-                                                g,
-                                                y_VSC, y_SC,
-                                                y_DRS
-                                            ))
+                                                for y_VSC in range(l_VSC + 1):
+                                                    for y_SC in range(l_SC + 1):
+
+                                                        # Eliminate invalid combos
+                                                        if y_VSC > 0 and y_SC > 0:
+                                                            continue
+
+                                                        for y_DRS in range(max_y_DRS + 1):
+
+                                                            states.append((
+                                                                tire_A, wA, mA,
+                                                                tire_B, wB, mB,
+                                                                tire_C, wC, mC,
+                                                                g_AB, g_AC,
+                                                                y_VSC, y_SC,
+                                                                y_DRS
+                                                            ))
 
     return states
 
@@ -416,12 +430,12 @@ def solve_SDP():
     states_final = generate_states(N + 1) 
     V = {state: 0 for state in states_final}
     for state in states_final:
-        tire_A, wA, mA, tire_B, wB, mB, g, _, _, _ = state
-        V[state] = V_end(tire_A, wA, mA, tire_B, wB, mB, g)
+        tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC, _, _, _ = state
+        V[state] = V_end(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC)
 
     # Policies
     xA_star = {}
-    xB_star = {}
+    xBC_star = {}
 
     RV_combinations = []
 
@@ -431,100 +445,100 @@ def solve_SDP():
                 prob = p_DRS * p_z1 * p_z2
                 RV_combinations.append((z1, z2, t_DRS, prob))
 
-    # state_next_cache = {}
-
     for n in range(N, 0, -1):
+        if n == 1 or n == N:  # No pit in lap 1 or N
+            T_allowed = [0]
+        else:
+            T_allowed = T0
+
+        T_allowed_cartesian = list(itertools.product(T_allowed, T_allowed))
+
         V_new = {}
         states = generate_states(n)
         for state in states:
-            tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_DRS = state
+            tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC, y_VSC, y_SC, y_DRS = state
 
-            # Step 6: compute V'_n(s,a,b) for all a, b ∈ T0.
+            # Step 6: compute V'_n(s,a,(b,c)) for all a ∈ T_allowed, (b, c) ∈ T_allowed^2
             V_prime = {}
-            for a in T0:
-                for b in T0:
+            for a in T_allowed:
+                for b,c in T_allowed_cartesian:
                     val = 0
 
                     for (z1, z2, t_DRS, p_rv) in RV_combinations:
                         for (y_VSC_n, y_SC_n), p_y in yellow_transitions(y_VSC, y_SC):
-                            # key = (tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_VSC_n, y_SC_n, y_DRS, n, a, b, z1, z2, t_DRS)
-                            state_n = state_next(tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_VSC_n, y_SC_n, y_DRS, n, a, b, z1, z2, t_DRS)
-
-                            # if key not in state_next_cache:
-                                # state_next_cache[key] = state_next(tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_VSC_n, y_SC_n, y_DRS, n, a, b, z1, z2, t_DRS)
-                            
-                            # state_n = state_next_cache[key]
+                            state_n = state_next(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC, y_VSC, y_SC, y_VSC_n, y_SC_n, y_DRS, n, a, b, c, z1, z2, t_DRS)
 
                             prob = p_rv * p_y
                             val += prob * V[state_n]                                    
 
-                    V_prime[(a, b)] = val
+                    V_prime[(a, (b, c))] = val
 
-            if g < 0: # A is leader (minimize g)
-                # Step 8: compute x_n^{B*}(s,a) for all a ∈ T0.
-                b_star = {a: max(T0, key=lambda b: V_prime[(a, b)]) for a in T0}
+            if g_AB < 0 and g_AC < 0: # A is leader (minimize g)
+                # Step 8: compute (x_n^{B*}, x_n^{C*})(s,a) for all a ∈ T_allowed.
+                bc_star = {a: max(T_allowed_cartesian, key=lambda bc: V_prime[(a, bc)]) for a in T_allowed}
 
                 # Step 9: compute x_n^{A*}(s)
-                a_star = min(T0, key=lambda a: V_prime[(a, b_star[a])])
+                a_star = min(T_allowed, key=lambda a: V_prime[(a, bc_star[a])])
 
                 # Step 10: value update
-                V_new[state] = V_prime[(a_star, b_star[a_star])]
+                V_new[state] = V_prime[(a_star, bc_star[a_star])]
 
                 xA_star[(n, state)] = a_star
-                xB_star[(n, state)] = b_star[a_star]
+                xBC_star[(n, state)] = bc_star[a_star]
             
-            else: # B is leader (maximize g)
-                # Step 12: compute x_n^{A*}(s,b) for all b ∈ T0.
-                a_star = {b: min(T0, key=lambda a: V_prime[(a, b)]) for b in T0}
+            else: # A is follower 
+                # Step 12: compute x_n^{A*}(s,(b, c)) for all b, c ∈ T_allowed.
+                a_star = {bc: min(T_allowed, key=lambda a: V_prime[(a, bc)]) for bc in T_allowed_cartesian}
 
-                # Step 13: compute x_n^{B*}(s)
-                b_star = max(T0, key=lambda b: V_prime[(a_star[b], b)])
+                # Step 13: compute (x_n^{B*}, x_n^{C*})(s)
+                bc_star = max(T_allowed_cartesian, key=lambda bc: V_prime[(a_star[bc], bc)])
 
                 # Step 14: value update
-                V_new[state] = V_prime[(a_star[b_star], b_star)]
+                V_new[state] = V_prime[(a_star[bc_star], bc_star)]
 
-                xA_star[(n, state)] = a_star[b_star]
-                xB_star[(n, state)] = b_star
+                xA_star[(n, state)] = a_star[bc_star]
+                xBC_star[(n, state)] = bc_star
     
         V = V_new
-    # return V, xA_star, xB_star
 
-    T_list = list(T)
-    nT = len(T_list)
+
+    nT = len(T)
+    nT_cartesian = len(T_cartesian)
 
     # Step 15: build payoff matrix U'
-    U = np.zeros((nT, nT))
+    U = np.zeros((nT, nT_cartesian))
 
-    g_init = discretize_gap(g1)
+    g_AB_init = discretize_gap(g_AB1)
+    g_AC_init = discretize_gap(g_AC1)
 
-    for i, tA in enumerate(T_list):
-        for j, tB in enumerate(T_list):
-            s1 = (tA, 0, 0, tB, 0, 0, g_init, 0, 0, 2)
+    for i, tA in enumerate(T):
+        for j, (tB, tC) in enumerate(T_cartesian):
+            s1 = (tA, 0, 0, tB, 0, 0, tC, 0, 0, g_AB_init, g_AC_init, 0, 0, 2)
             U[i, j] = V[s1]
 
     # Step 16: solve zero-sum game via LP   
-    # Player B (E.3)
+    # Players (B, C) (E.3)
 
-    # Variables: [π_B (nT), ρ]
-    c = np.zeros(nT + 1) # Coefficients of the objective function to minimize.
+    # Variables: [π_BC (nT_cartesian), ρ]
+    c = np.zeros(nT_cartesian + 1) # Coefficients of the objective function to minimize.
     c[-1] = -1  # maximize ρ
 
     A_ub = [] # Coefficients for the inequality constraints 
     b_ub = [] # Right-hand side values for the inequality constraints.
 
-    # ρ - (U π_B)_i ≤ 0  →  -U[i,:] π_B + ρ ≤ 0
+    # ρ - (U π_BC)_i ≤ 0  →  -U[i,:] π_BC + ρ ≤ 0
     for i in range(nT):
-        A_ub.append([-U[i, j] for j in range(nT)] + [1])
+        A_ub.append([-U[i, j] for j in range(nT_cartesian)] + [1])
         b_ub.append(0)
 
-    A_eq = [[1]*nT + [0]] # Coefficients for the equality constraints (Ax = b).
+    A_eq = [[1]*nT_cartesian + [0]] # Coefficients for the equality constraints (Ax = b).
     b_eq = [1] # Right-hand side value for the equality constraints.
 
-    bounds = [(0,1)]*nT + [(None, None)] # Specifies the bounds for each variable in the form of a sequence of tuples.
+    bounds = [(0,1)]*nT_cartesian + [(None, None)] # Specifies the bounds for each variable in the form of a sequence of tuples.
 
     resB = linprog(c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method='highs')
 
-    pi_B = resB.x[:-1]
+    pi_BC = resB.x[:-1]
 
     # Player A (E.4)
     # Variables: [π_A (nT), ρ]
@@ -535,7 +549,7 @@ def solve_SDP():
     b_ub = []
 
     # ρ - (U^T π_A)_i ≥ 0  →  (U^T π_A)_i - ρ ≤ 0
-    for i in range(nT):
+    for i in range(nT_cartesian):
         A_ub.append([U[j, i] for j in range(nT)] + [-1])
         b_ub.append(0)
 
@@ -548,28 +562,20 @@ def solve_SDP():
 
     pi_A = resA.x[:-1]
 
-    return U, pi_A, pi_B, xA_star, xB_star
+    return U, pi_A, pi_BC, xA_star, xBC_star
 
-# Run
-# U, pi_A, pi_B = solve_SDP()
 
-# print(f"Payoff matrix U': \n{U}")
-# print(f"π^A (mixed strategy): \n{pi_A}")
-# print(f"π^B (mixed strategy):\n{pi_B}")
-
-# if __name__ == '__main__':
-    # V, xA, xB = solve_algorithm1()
-    # print('Solved Algorithm 1')
-    # print('Number of states:', len(V))
-
-def simulate_race(pi_A, pi_B, xA_star, xB_star):
+def simulate_race(pi_A, pi_BC, xA_star, xBC_star):
     # Initial state
     tA = np.random.choice(T, p=pi_A)
-    tB = np.random.choice(T, p=pi_B)
 
-    g = discretize_gap(g1)
+    idx_BC = np.random.choice(len(T_cartesian), p=pi_BC)
+    tB, tC = T_cartesian[idx_BC]
 
-    state = (tA, 0, 0, tB, 0, 0, g, 0, 0, 2)
+    g_AB = discretize_gap(g_AB1)
+    g_AC = discretize_gap(g_AC1)
+
+    state = (tA, 0, 0, tB, 0, 0, tC, 0, 0, g_AB, g_AC, 0, 0, 2)
 
     history = []
     gap_history = []
@@ -579,19 +585,20 @@ def simulate_race(pi_A, pi_B, xA_star, xB_star):
     # Simulate laps
     for n in range(1, N + 1):
 
-        tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_DRS = state
+        tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC, y_VSC, y_SC, y_DRS = state
 
         # Optimal decisions from SDP
         a = xA_star[(n, state)]
-        b = xB_star[(n, state)]
+        b, c = xBC_star[(n, state)]
 
         pitA = (a != 0)
         pitB = (b != 0)
+        pitC = (c != 0)
 
-        history.append((n, tire_A, tire_B))
-        gap_history.append(g)
+        history.append((n, tire_A, tire_B, tire_C))
+        gap_history.append((g_AB, g_AC))
         yellow_history.append((y_VSC, y_SC))
-        pit_history.append((pitA, pitB, a, b))
+        pit_history.append((pitA, pitB, pitC, a, b, c))
 
         # Sample stochastic variables
         z1 = np.random.choice(Z1_vals, p=Z_prob)
@@ -608,66 +615,99 @@ def simulate_race(pi_A, pi_B, xA_star, xB_star):
         state = state_next(
             tire_A, wA, mA,
             tire_B, wB, mB,
-            g,
+            tire_C, wC, mC, 
+            g_AB, g_AC,
             y_VSC, y_SC,
             y_VSC_n, y_SC_n,
             y_DRS,
             n,
-            a, b,
+            a, b, c, 
             z1, z2, t_DRS
         )
 
     # Final outcome
-    final_gap = state[6]
+    final_g_AB = state[9]
+    final_g_AC = state[10]
 
-    if final_gap < 0:
+    if final_g_AB < 0 and final_g_AC < 0:
         winner = "A"
-    elif final_gap > 0:
-        winner = "B"
+    elif final_g_AB > 0 or final_g_AC > 0:
+        winner = "BC"
     else:
         winner = "tie"
 
-    return final_gap, winner, history, gap_history, yellow_history, pit_history
+    return (final_g_AB, final_g_AC), winner, history, gap_history, yellow_history, pit_history
 
-def run_simulations(U, pi_A, pi_B, xA_star, xB_star, n_sim=10000):
+def run_simulations(U, pi_A, pi_BC, xA_star, xBC_star, n_sim=10000):
     results = []
 
     for _ in range(n_sim):
-        g_final, winner, _, _, _, _ = simulate_race(pi_A, pi_B, xA_star, xB_star)
+        g_final, winner, _, _, _, _ = simulate_race(pi_A, pi_BC, xA_star, xBC_star)
         results.append((g_final, winner))
 
-    gaps = np.array([r[0] for r in results])
+    g_AB = np.array([r[0][0] for r in results])
+    g_AC = np.array([r[0][1] for r in results])
     winners = [r[1] for r in results]
 
     # Probabilities
     p_A_win = np.mean([w == "A" for w in winners])
-    p_B_win = np.mean([w == "B" for w in winners])
+    p_BC_win = np.mean([w == "BC" for w in winners])
     p_tie = np.mean([w == "tie" for w in winners])
 
     # Unconditional stats
-    mean_gap = np.mean(gaps)
-    std_gap = np.std(gaps)
+    mean_g_AB = np.mean(g_AB)
+    mean_g_AC = np.mean(g_AC)
+    std_g_AB = np.std(g_AB)
+    std_g_AC = np.std(g_AC)
 
-    # Conditional stats
-    gaps_A_win = gaps[gaps < 0]
-    gaps_B_win = gaps[gaps > 0]
+    # Conditional stats for A wins
+    gaps_AB_A_win = [g_AB[i] for i, w in enumerate(winners) if w == "A"]
+    gaps_AC_A_win = [g_AC[i] for i, w in enumerate(winners) if w == "A"]
 
-    mean_A_win = np.mean(gaps_A_win) if len(gaps_A_win) > 0 else 0
-    mean_B_win = np.mean(gaps_B_win) if len(gaps_B_win) > 0 else 0
+    # Conditional stats for BC wins
+    gaps_AB_BC_win = [g_AB[i] for i, w in enumerate(winners) if w == "BC"]
+    gaps_AC_BC_win = [g_AC[i] for i, w in enumerate(winners) if w == "BC"]
 
-    std_A_win = np.std(gaps_A_win) if len(gaps_A_win) > 0 else 0
-    std_B_win = np.std(gaps_B_win) if len(gaps_B_win) > 0 else 0
+    # Conditional stats for mixed outcomes
+    # gaps_AB_mixed = [g_AB[i] for i, w in enumerate(winners) if w == "mixed"]
+    # gaps_AC_mixed = [g_AC[i] for i, w in enumerate(winners) if w == "mixed"]
+
+    # Means
+    mean_AB_A_win = np.mean(gaps_AB_A_win) if gaps_AB_A_win else 0
+    mean_AC_A_win = np.mean(gaps_AC_A_win) if gaps_AC_A_win else 0
+    mean_AB_BC_win = np.mean(gaps_AB_BC_win) if gaps_AB_BC_win else 0
+    mean_AC_BC_win = np.mean(gaps_AC_BC_win) if gaps_AC_BC_win else 0
+    # mean_AB_mixed = np.mean(gaps_AB_mixed) if gaps_AB_mixed else 0
+    # mean_AC_mixed = np.mean(gaps_AC_mixed) if gaps_AC_mixed else 0
+
+    # Standard deviations
+    std_AB_A_win = np.std(gaps_AB_A_win) if gaps_AB_A_win else 0
+    std_AC_A_win = np.std(gaps_AC_A_win) if gaps_AC_A_win else 0
+    std_AB_BC_win = np.std(gaps_AB_BC_win) if gaps_AB_BC_win else 0
+    std_AC_BC_win = np.std(gaps_AC_BC_win) if gaps_AC_BC_win else 0
+    # std_AB_mixed = np.std(gaps_AB_mixed) if gaps_AB_mixed else 0
+    # std_AC_mixed = np.std(gaps_AC_mixed) if gaps_AC_mixed else 0
 
     return {
         "P(A wins)": p_A_win,
-        "P(B wins)": p_B_win,
-        "P(tie)": p_tie,
-        "Mean gap": mean_gap,
-        "Std gap": std_gap,
-        "Mean gap | A wins": mean_A_win,
-        "Mean gap | B wins": mean_B_win,
-        "Std gap | A wins": std_A_win,
-        "Std gap | B wins": std_B_win,
+        "P(BC wins)": p_BC_win,
+        # "P(mixed)": p_mixed,
+        "Mean gap g_AB": mean_g_AB,
+        "Mean gap g_AC": mean_g_AC,
+        "Std gap g_AB": std_g_AB,
+        "Std gap g_AC": std_g_AC,
+        "Mean gap g_AB | A wins": mean_AB_A_win,
+        "Mean gap g_AC | A wins": mean_AC_A_win,
+        "Mean gap g_AB | BC wins": mean_AB_BC_win,
+        "Mean gap g_AC | BC wins": mean_AC_BC_win,
+        # "Mean gap g_AB | mixed": mean_AB_mixed,
+        # "Mean gap g_AC | mixed": mean_AC_mixed,
+        "Std gap g_AB | A wins": std_AB_A_win,
+        "Std gap g_AC | A wins": std_AC_A_win,
+        "Std gap g_AB | BC wins": std_AB_BC_win,
+        "Std gap g_AC | BC wins": std_AC_BC_win,
+        # "Std gap g_AB | mixed": std_AB_mixed,
+        # "Std gap g_AC | mixed": std_AC_mixed,
     }
 
 def plot_sample_path(history, gap_history, yellow_history, pit_history):
@@ -678,8 +718,10 @@ def plot_sample_path(history, gap_history, yellow_history, pit_history):
 
     # TOP: pit strategy
     # horizontal dashed lines
-    ax1.hlines(1, 1, N, linestyles='dashed')
-    ax1.hlines(0, 1, N, linestyles='dashed')
+    # ax1.hlines(1, 1, N, linestyles='dashed')
+    # ax1.hlines(0, 1, N, linestyles='dashed')
+    ax1.hlines([2,1,0], 1, N, linestyles='dashed')  # horizontal guides for C, A, B
+
 
     # color mapping
     tire_colors = {
@@ -688,79 +730,98 @@ def plot_sample_path(history, gap_history, yellow_history, pit_history):
         3: "black"     # Hard (if used)
     }
 
+    # Plot pit stops for all 3 players
     for i, lap in enumerate(laps):
-        pitA, pitB, a, b = pit_history[i]
+        pitA, pitB, pitC, a, b, c = pit_history[i]
+        tire_A, tire_B, tire_C = history[i][1], history[i][2], history[i][3]
 
         # Only plot when pit happens OR first lap
         # Driver A
         if i == 0 or pitA:
-            tire_label = history[i][1] if not pitA else a
+            tire_label = tire_A if not pitA else a
             color = tire_colors[tire_label]
             
-            ax1.scatter(lap, 1, s=120, color=color)
-            ax1.text(lap, 1, 
+            ax1.scatter(lap, 2, s=120, color=color)
+            ax1.text(lap, 2, 
                      "S" if tire_label == 1 else ("M" if tire_label == 2 else "H"),
                      ha='center', va='center', fontsize=9, color='white')
 
         # Driver B
         if i == 0 or pitB:
-            tire_label = history[i][2] if not pitB else b
+            tire_label = tire_B if not pitB else b
+            color = tire_colors[tire_label]
+
+            ax1.scatter(lap, 1, s=120, color=color)
+            ax1.text(lap, 1, 
+                     "S" if tire_label == 1 else ("M" if tire_label == 2 else "H"),
+                     ha='center', va='center', fontsize=9, color='white')
+            
+        # Player C
+        if i == 0 or pitC:
+            tire_label = tire_C if not pitC else c
             color = tire_colors[tire_label]
 
             ax1.scatter(lap, 0, s=120, color=color)
             ax1.text(lap, 0, 
-                     "S" if tire_label == 1 else ("M" if tire_label == 2 else "H"),
+                     "S" if tire_label==1 else ("M" if tire_label==2 else "H"),
                      ha='center', va='center', fontsize=9, color='white')
+            
 
-    ax1.set_yticks([0, 1])
-    ax1.set_yticklabels(["B", "A"])
+    ax1.set_yticks([0, 1, 2])
+    ax1.set_yticklabels(["C", "B", "A"])
     ax1.set_title("Race strategy")
+    ax1.set_ylabel("Player")
 
-    # BOTTOM: gap
-    ax2.plot(laps, gap_history, linewidth=2)
+    # BOTTOM: gaps
+    g_AB = [g[0] for g in gap_history]
+    g_AC = [g[1] for g in gap_history]
 
-     # Merge consecutive yellow flags into one block
+    ax2.plot(laps, g_AB, label="g_AB", linewidth=2)
+    ax2.plot(laps, g_AC, label="g_AC", linewidth=2)
+
+    # Merge consecutive yellow flags into one block
     start_idx = None
     current_flag = 0  # 0 = none, 1 = VSC, 2 = SC
 
     for i, (yV, yS) in enumerate(yellow_history + [(0, 0)]):  # append dummy to flush last block
         flag = 1 if yV > 0 else (2 if yS > 0 else 0)
+        end_lap = min(laps[i-1] + 1, N)
 
         if flag != current_flag:
             if current_flag != 0:
                 # Plot the previous block
                 color = 'yellow' if current_flag == 1 else 'orange'
-                ax2.axvspan(laps[start_idx], laps[i-1]+1, alpha=0.3, color=color)
+                ax1.axvspan(laps[start_idx], end_lap, alpha=0.3, color=color) # Top plot
+                ax2.axvspan(laps[start_idx], end_lap, alpha=0.3, color=color) # Bottom plot
                 # Label in the middle of the block
-                ax2.text((laps[start_idx] + laps[i-1]+1)/2, max(gap_history)*0.95, 
+                ax1.text((laps[start_idx] + end_lap)/2, max(gap_history)*0.95, # Top plot
+                         "VSC" if current_flag == 1 else "SC",
+                         ha='center', va='top', fontsize=9, color='black', rotation=90)
+                ax2.text((laps[start_idx] + end_lap)/2, max(gap_history)*0.95,  # Bottom plot
                          "VSC" if current_flag == 1 else "SC",
                          ha='center', va='top', fontsize=9, color='black', rotation=90)
             # start new block
             start_idx = i
             current_flag = flag
             
-    ax2.axhline(0, linestyle='--')
+    ax2.axhline(0, linestyle='--', color='black')
     ax2.set_xlabel("Lap")
     ax2.set_ylabel("Time Difference [s]")
+    ax2.legend()
+    ax2.set_title("Time gaps relative to A")
 
     plt.tight_layout()
     plt.show()
     
-def get_sample_no_yellow(pi_A, pi_B, xA_star, xB_star):
+def get_sample_no_yellow(pi_A, pi_BC, xA_star, xBC_star):
     while True:
-        _, _, h, g, y, p = simulate_race(pi_A, pi_B, xA_star, xB_star)
+        _, _, h, g, y, p = simulate_race(pi_A, pi_BC, xA_star, xBC_star)
         if all(yV == 0 and yS == 0 for (yV, yS) in y):
             return h, g, y, p
 
-# def get_sample_with_VSC(pi_A, pi_B, xA_star, xB_star):
-    # while True:
-        # _, _, h, g, y, p = simulate_race(pi_A, pi_B, xA_star, xB_star)
-        # if any(yV > 0 for (yV, yS) in y):
-            # return h, g, y, p
-        
-def get_sample_with_yellow(pi_A, pi_B, xA_star, xB_star):
+def get_sample_with_yellow(pi_A, pi_BC, xA_star, xBC_star):
     while True:
-        _, _, h, g, y, p = simulate_race(pi_A, pi_B, xA_star, xB_star)
+        _, _, h, g, y, p = simulate_race(pi_A, pi_BC, xA_star, xBC_star)
         # Check for any yellow flag (VSC or SC)
         if any(yV > 0 or yS > 0 for (yV, yS) in y):
             return h, g, y, p
