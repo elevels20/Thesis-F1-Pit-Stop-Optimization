@@ -353,21 +353,13 @@ def solve_SDP():
 
             # Step 6: compute V'_n(s,a,b) for all a, b ∈ T0.
             V_prime = {}
-            # for a in T0:
             for a in T_allowed:
-                # for b in T0:
                 for b in T_allowed:
                     val = 0
 
                     for (z1, z2, t_DRS, p_rv) in RV_combinations:
                         for (y_VSC_n, y_SC_n), p_y in yellow_transitions(y_VSC, y_SC):
-                            # key = (tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_VSC_n, y_SC_n, y_DRS, n, a, b, z1, z2, t_DRS)
                             state_n = state_next(tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_VSC_n, y_SC_n, y_DRS, n, a, b, z1, z2, t_DRS)
-
-                            # if key not in state_next_cache:
-                                # state_next_cache[key] = state_next(tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_VSC_n, y_SC_n, y_DRS, n, a, b, z1, z2, t_DRS)
-                            
-                            # state_n = state_next_cache[key]
 
                             prob = p_rv * p_y
                             val += prob * V[state_n]                                    
@@ -376,12 +368,9 @@ def solve_SDP():
 
             if g < 0: # A is leader (minimize g)
                 # Step 8: compute x_n^{B*}(s,a) for all a ∈ T0.
-                # b_star = {a: max(T0, key=lambda b: V_prime[(a, b)]) for a in T0}
                 b_star = {a: max(T_allowed, key=lambda b: V_prime[(a, b)]) for a in T_allowed}
-                # b_star = {a: max(T0, key=lambda b, a=a: V_prime[(a, b)]) for a in T0}
 
                 # Step 9: compute x_n^{A*}(s)
-                # a_star = min(T0, key=lambda a: V_prime[(a, b_star[a])])
                 a_star = min(T_allowed, key=lambda a: V_prime[(a, b_star[a])])
 
                 # Step 10: value update
@@ -392,12 +381,9 @@ def solve_SDP():
             
             else: # B is leader (maximize g)
                 # Step 12: compute x_n^{A*}(s,b) for all b ∈ T0.
-                # a_star = {b: min(T0, key=lambda a: V_prime[(a, b)]) for b in T0}
                 a_star = {b: min(T_allowed, key=lambda a: V_prime[(a, b)]) for b in T_allowed}
-                # a_star = {b: min(T0, key=lambda a, b=b: V_prime[(a, b)]) for b in T0}
 
                 # Step 13: compute x_n^{B*}(s)
-                # b_star = max(T0, key=lambda b: V_prime[(a_star[b], b)])
                 b_star = max(T_allowed, key=lambda b: V_prime[(a_star[b], b)])
 
                 # Step 14: value update
@@ -639,20 +625,25 @@ def plot_sample_path(history, gap_history, yellow_history, pit_history):
     # BOTTOM: gap
     ax2.plot(laps, gap_history, linewidth=2)
 
-     # Merge consecutive yellow flags into one block
+    # Merge consecutive yellow flags into one block
     start_idx = None
     current_flag = 0  # 0 = none, 1 = VSC, 2 = SC
 
     for i, (yV, yS) in enumerate(yellow_history + [(0, 0)]):  # append dummy to flush last block
         flag = 1 if yV > 0 else (2 if yS > 0 else 0)
+        end_lap = min(laps[i-1] + 1, N)
 
         if flag != current_flag:
             if current_flag != 0:
                 # Plot the previous block
                 color = 'yellow' if current_flag == 1 else 'orange'
-                ax2.axvspan(laps[start_idx], laps[i-1]+1, alpha=0.3, color=color)
+                ax1.axvspan(laps[start_idx], end_lap, alpha=0.3, color=color) # Top plot
+                ax2.axvspan(laps[start_idx], end_lap, alpha=0.3, color=color) # Bottom plot
                 # Label in the middle of the block
-                ax2.text((laps[start_idx] + laps[i-1]+1)/2, max(gap_history)*0.95, 
+                ax1.text((laps[start_idx] + end_lap)/2, max(gap_history)*0.95, # Top plot
+                         "VSC" if current_flag == 1 else "SC",
+                         ha='center', va='top', fontsize=9, color='black', rotation=90)
+                ax2.text((laps[start_idx] + end_lap)/2, max(gap_history)*0.95,  # Bottom plot
                          "VSC" if current_flag == 1 else "SC",
                          ha='center', va='top', fontsize=9, color='black', rotation=90)
             # start new block
