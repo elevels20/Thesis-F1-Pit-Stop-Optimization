@@ -267,19 +267,25 @@ def V_end(tire_A, wA, mA, tire_B, wB, mB, g, objective):
                 return g
             else:
                 return - math.inf
-        elif Hb:
+        elif Hb: # and not Ha
             return math.inf
         else:
             return 0
     elif objective == "win":
-        val = 0
-        # B wins (g > 0) and is feasible
-        if Hb and g > 0:
-            val += 1
-        # A wins (g < 0) and is feasible
-        if Ha and g < 0:
-            val -= 1
-        return val
+        if Ha:
+            if Hb:
+                if g < 0:
+                    return -1
+                elif g > 0:
+                    return 1
+                else:
+                    return 0
+            else: 
+                return - math.inf
+        elif Hb: # and not Ha
+            return math.inf
+        else:
+            return 0
     else:
         raise ValueError("Unknown objective: choose 'gap' or 'win'")
 
