@@ -257,21 +257,31 @@ def H(w, u, m):
     """
     return w <= u and m == 1
 
-def V_end(tire_A, wA, mA, tire_B, wB, mB, g):
+def V_end(tire_A, wA, mA, tire_B, wB, mB, g, objective):
     Ha = H(wA, u[tire_A - 1], mA)
     Hb = H(wB, u[tire_B - 1], mB)
 
-    if Ha:
-        if Hb:
-            return g
+    if objective == "gap":
+        if Ha:
+            if Hb:
+                return g
+            else:
+                return - math.inf
+        elif Hb:
+            return math.inf
         else:
-            return - math.inf
-    elif Hb:
-        return math.inf
+            return 0
+    elif objective == "win":
+        val = 0
+        # B wins (g > 0) and is feasible
+        if Hb and g > 0:
+            val += 1
+        # A wins (g < 0) and is feasible
+        if Ha and g < 0:
+            val -= 1
+        return val
     else:
-        return 0
-
-# state = (tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_DRS)
+        raise ValueError("Unknown objective: choose 'gap' or 'win'")
 
 def generate_states(n):
     states = []
@@ -318,13 +328,13 @@ def generate_states(n):
     return states
 
 # Stochastic Dynamic Programming Algorithm
-def solve_SDP():
+def solve_SDP(objective="gap"):
     # Step 3: Compute 𝑉 ′^{*} _N+1(s_n) for all s_n ∈ S_N+1
     states_final = generate_states(N + 1) 
     V = {state: 0 for state in states_final}
     for state in states_final:
         tire_A, wA, mA, tire_B, wB, mB, g, _, _, _ = state
-        V[state] = V_end(tire_A, wA, mA, tire_B, wB, mB, g)
+        V[state] = V_end(tire_A, wA, mA, tire_B, wB, mB, g, objective)
 
     # Policies
     xA_star = {}
@@ -581,8 +591,8 @@ def plot_sample_path(history, gap_history, yellow_history, pit_history):
 
     # TOP: pit strategy
     # horizontal dashed lines
-    ax1.hlines(1, 1, N, linestyles='dashed')
-    ax1.hlines(0, 1, N, linestyles='dashed')
+    ax1.hlines(1, 1, N, linestyles='dashed', color='black')
+    ax1.hlines(0, 1, N, linestyles='dashed', color='black')
 
     # color mapping
     tire_colors = {
@@ -648,7 +658,7 @@ def plot_sample_path(history, gap_history, yellow_history, pit_history):
             start_idx = i
             current_flag = flag
             
-    ax2.axhline(0, linestyle='--')
+    ax2.axhline(0, linestyle='--', color='black')
     ax2.set_xlabel("Lap")
     ax2.set_ylabel("Time Difference [s]")
     ax2.set_title("Partial Race Time Difference")
