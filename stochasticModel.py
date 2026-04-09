@@ -125,7 +125,7 @@ def g_next_under_SC(g, pitA, pitB):
 
     return 0.5 * (-1) ** xi
 
-def lap_time_no_yellow_flag(driver, n, tire, w, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS):
+def lap_time_no_yellow_flag(driver, n, tire_n, w, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS):
     IA = 1 if pitA else 0
     IB = 1 if pitB else 0
 
@@ -143,13 +143,13 @@ def lap_time_no_yellow_flag(driver, n, tire, w, pitA, pitB, g, y_DRS, Z1, Z2, T_
         pit = pitB
         drs = drs_B
 
-    gamma = d0[driver] + (p0[driver] if pit else 0) + tire_wear(tire, w) - h * n
+    gamma = d0[driver] + (p0[driver] if pit else 0) + tire_wear(tire_n, w) - h * n
     
     return gamma + eta - T_DRS * drs
 
-def final_lap_time(y_VSC, y_SC, driver, n, tire, w, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS):
+def final_lap_time(y_VSC, y_SC, driver, n, tire_n, w, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS):
     if y_VSC + y_SC == 0:
-        return lap_time_no_yellow_flag(driver, n, tire, w, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS)
+        return lap_time_no_yellow_flag(driver, n, tire_n, w, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS)
     elif y_VSC > 0:
         if driver == "A":
             pit = pitA
@@ -178,8 +178,8 @@ def m_next(m, decision, tire):
     else:
         return max(m, 0)
     
-def g_next(y_VSC, y_SC, n, tire_A, tire_B, wA, wB, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS):
-    return g + final_lap_time(y_VSC, y_SC, "A", n, tire_A, wA, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS) - final_lap_time(y_VSC, y_SC, "B", n, tire_B, wB, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS)
+def g_next(y_VSC, y_SC, n, tire_A_n, tire_B_n, wA, wB, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS):
+    return g + final_lap_time(y_VSC, y_SC, "A", n, tire_A_n, wA, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS) - final_lap_time(y_VSC, y_SC, "B", n, tire_B_n, wB, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS)
     
 def discretize_gap(g):
     return min(g_values, key=lambda x: abs(x - g))
@@ -222,7 +222,7 @@ def state_next(tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_VSC_n, y_SC_n, 
     pitA = True if decisionA != 0 else False
     pitB = True if decisionB != 0 else False
 
-    g_n = g_next(y_VSC, y_SC, n, tire_A, tire_B, wA, wB, pitA, pitB, g, y_DRS, z1, z2, t_DRS)
+    g_n = g_next(y_VSC, y_SC, n, tire_A_n, tire_B_n, wA, wB, pitA, pitB, g, y_DRS, z1, z2, t_DRS)
     g_n = discretize_gap(g_n)
 
     y_DRS_n = y_DRS_next(y_DRS, y_VSC, y_SC)

@@ -4,7 +4,7 @@ from scipy.optimize import linprog
 import math
 
 # PARAMETERS
-N = 26 # Number of laps 
+N = 5 # Number of laps 
 # T = [1, 2, 3] # Tire compounds. 1 = Soft, 2 = Medium, 3 = Hard
 T = [1, 2]
 T0 = [0] + T # 0 = no pit stop
@@ -12,10 +12,12 @@ T0 = [0] + T # 0 = no pit stop
 # u1 = 30 # Lifespan in number of laps for Soft tires
 # u2 = 40 # Lifespan in number of laps for Medium tires
 # u3 = 50 # Lifespan in number of laps for Hard tires
-u1 = 15
-u2 = 25
-# u1 = 3
-# u2 = 4
+# u1 = 15
+# u2 = 25
+# u1 = 7
+# u2 = 9
+u1 = 3
+u2 = 4
 # u3 = 5
 # u = [u1, u2, u3]
 u = [u1, u2]
@@ -43,11 +45,6 @@ g1 = -0.4
 # g_step = 0.04
 # g_values = np.arange(g_min, g_max + g_step, g_step)
 
-# g_min = -4
-# g_max = 4
-# g_step = 2.0        
-# g_values = np.arange(g_min, g_max + g_step, g_step)
-
 g_min = -2
 g_max = 2
 g_step = 0.4        
@@ -68,12 +65,12 @@ k_VSC = 2 # Number of laps needed to be raced after the end of a VSC to enable t
 k_SC = 2 # Number of laps needed to be raced after the end of a SC to enable the DRS
 
 # RANDOM VARIABLES
-Z1_vals = [0.2, 0.4, 0.6] 
-Z2_vals = [0.5, 0.7, 0.9]
-Z_prob = [1/3, 1/3, 1/3]
+# Z1_vals = [0.2, 0.4, 0.6] 
+# Z2_vals = [0.5, 0.7, 0.9]
+# Z_prob = [1/3, 1/3, 1/3]
 
-TDRS_vals = [0.1, 0.3, 0.5]
-TDRS_prob = [0.2, 0.7, 0.1]
+# TDRS_vals = [0.1, 0.3, 0.5]
+# TDRS_prob = [0.2, 0.7, 0.1]
 
 # Z1_vals = [0.2, 0.4]
 # Z2_vals = [0.5, 0.7]
@@ -82,12 +79,12 @@ TDRS_prob = [0.2, 0.7, 0.1]
 # TDRS_vals = [0.1, 0.3]
 # TDRS_prob = [0.22, 0.78]
 
-# Z1_vals = [0.4]
-# Z2_vals = [0.7]
-# Z_prob = [1.0]
+Z1_vals = [0.4]
+Z2_vals = [0.7]
+Z_prob = [1.0]
 
-# TDRS_vals = [0.3]
-# TDRS_prob = [1.0]
+TDRS_vals = [0.3]
+TDRS_prob = [1.0]
 
 # state = (tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_DRS)
 
@@ -143,7 +140,7 @@ def g_next_under_SC(g, pitA, pitB):
 
     return 0.5 * (-1) ** xi
 
-def lap_time_no_yellow_flag(driver, n, tire, w, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS):
+def lap_time_no_yellow_flag(driver, n, tire_n, w, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS):
     IA = 1 if pitA else 0
     IB = 1 if pitB else 0
 
@@ -163,13 +160,13 @@ def lap_time_no_yellow_flag(driver, n, tire, w, pitA, pitB, g, y_DRS, Z1, Z2, T_
         drs = drs_B
         appG = max(delta + eps, 0) if eps <= 0 else 0
 
-    gamma = d0[driver] + (p0[driver] if pit else 0) + tire_wear(tire, w) - h * n
+    gamma = d0[driver] + (p0[driver] if pit else 0) + tire_wear(tire_n, w) - h * n
     
     return gamma + eta - T_DRS * drs + appG
 
-def final_lap_time(y_VSC, y_SC, driver, n, tire, w, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS):
+def final_lap_time(y_VSC, y_SC, driver, n, tire_n, w, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS):
     if y_VSC + y_SC == 0:
-        return lap_time_no_yellow_flag(driver, n, tire, w, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS)
+        return lap_time_no_yellow_flag(driver, n, tire_n, w, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS)
     elif y_VSC > 0:
         if driver == "A":
             pit = pitA
@@ -198,8 +195,8 @@ def m_next(m, decision, tire):
     else:
         return max(m, 0)
     
-def g_next(y_VSC, y_SC, n, tire_A, tire_B, wA, wB, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS):
-    return g + final_lap_time(y_VSC, y_SC, "A", n, tire_A, wA, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS) - final_lap_time(y_VSC, y_SC, "B", n, tire_B, wB, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS)
+def g_next(y_VSC, y_SC, n, tire_A_n, tire_B_n, wA, wB, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS):
+    return g + final_lap_time(y_VSC, y_SC, "A", n, tire_A_n, wA, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS) - final_lap_time(y_VSC, y_SC, "B", n, tire_B_n, wB, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS)
     
 def discretize_gap(g):
     return min(g_values, key=lambda x: abs(x - g))
@@ -242,7 +239,7 @@ def state_next(tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_VSC_n, y_SC_n, 
     pitA = True if decisionA != 0 else False
     pitB = True if decisionB != 0 else False
 
-    g_n = g_next(y_VSC, y_SC, n, tire_A, tire_B, wA, wB, pitA, pitB, g, y_DRS, z1, z2, t_DRS)
+    g_n = g_next(y_VSC, y_SC, n, tire_A_n, tire_B_n, wA, wB, pitA, pitB, g, y_DRS, z1, z2, t_DRS)
     g_n = discretize_gap(g_n)
 
     y_DRS_n = y_DRS_next(y_DRS, y_VSC, y_SC)
