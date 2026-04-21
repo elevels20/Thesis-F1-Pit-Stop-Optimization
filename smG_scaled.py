@@ -4,7 +4,7 @@ from scipy.optimize import linprog
 import math
 
 # PARAMETERS
-N = 10 # Number of laps 
+N = 20 # Number of laps 
 # T = [1, 2, 3] # Tire compounds. 1 = Soft, 2 = Medium, 3 = Hard
 T = [1, 2]
 T0 = [0] + T # 0 = no pit stop
@@ -14,8 +14,10 @@ T0 = [0] + T # 0 = no pit stop
 # u3 = 50 # Lifespan in number of laps for Hard tires
 # u1 = 15
 # u2 = 25
-u1 = 7
-u2 = 9
+u1 = 10
+u2 = 15
+# u1 = 7
+# u2 = 9
 # u1 = 3
 # u2 = 4
 # u3 = 5
@@ -25,7 +27,7 @@ u = [u1, u2]
 d0 = {"A":97.22, "B":97.24} # Lap time for driver A/B when using new soft compound tires at the beginning of the race (without pit stops, interactions, or DRS)
 p0 = {"A":20.2, "B":20.0} # Additional lap time for driver A/B due to a pit stop
 
-lambda_pen = 2.0
+lambda_pen = 2.0 # Factor that penalizes the drivers’ lap times because of being too close to each other
 h = 0.02 # Lap time reduction between two consecutive laps attributed to fuel consumption (making the car lighter)
 
 d_VSC = 170 # Lap time during a VSC (without pit stop)
@@ -47,7 +49,8 @@ g1 = -0.4
 
 g_min = -2
 g_max = 2
-g_step = 0.4        
+# g_step = 0.4        
+g_step = 0.2        
 g_values = np.arange(g_min, g_max + g_step, g_step)
 
 # Scaling
@@ -59,6 +62,10 @@ p_VSC = {k: v * SCALE for k, v in p_VSC.items()}
 delta *= SCALE
 h *= SCALE
 lambda_pen = 2.0 / SCALE
+
+# Fix baseline lap times
+d0 = {k: v * SCALE for k, v in d0.items()}
+# d0 = {"A": 0.0, "B": (97.24 - 97.22) * SCALE}
 
 l_VSC = 2 # Laps that last a VSC
 l_SC = 3 # Laps that last a SC
@@ -75,12 +82,12 @@ k_VSC = 2 # Number of laps needed to be raced after the end of a VSC to enable t
 k_SC = 2 # Number of laps needed to be raced after the end of a SC to enable the DRS
 
 # RANDOM VARIABLES
-# Z1_vals = [0.2, 0.4, 0.6] 
-# Z2_vals = [0.5, 0.7, 0.9]
-# Z_prob = [1/3, 1/3, 1/3]
+Z1_vals = [0.2, 0.4, 0.6] 
+Z2_vals = [0.5, 0.7, 0.9]
+Z_prob = [1/3, 1/3, 1/3]
 
-# TDRS_vals = [0.1, 0.3, 0.5]
-# TDRS_prob = [0.2, 0.7, 0.1]
+TDRS_vals = [0.1, 0.3, 0.5]
+TDRS_prob = [0.2, 0.7, 0.1]
 
 # Z1_vals = [0.2, 0.4]
 # Z2_vals = [0.5, 0.7]
@@ -89,12 +96,12 @@ k_SC = 2 # Number of laps needed to be raced after the end of a SC to enable the
 # TDRS_vals = [0.1, 0.3]
 # TDRS_prob = [0.22, 0.78]
 
-Z1_vals = [0.4]
-Z2_vals = [0.7]
-Z_prob = [1.0]
+# Z1_vals = [0.4]
+# Z2_vals = [0.7]
+# Z_prob = [1.0]
 
-TDRS_vals = [0.3]
-TDRS_prob = [1.0]
+# TDRS_vals = [0.3]
+# TDRS_prob = [1.0]
 
 # state = (tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_DRS)
 
