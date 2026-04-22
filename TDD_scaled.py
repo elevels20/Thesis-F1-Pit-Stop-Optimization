@@ -31,6 +31,8 @@ h = 0.02 # Lap time reduction between two consecutive laps attributed to fuel co
 p_VSC = {"A":10.0, "B":10.0, "C": 10.0} # Additional lap time for driver A/B/C due to a pit stop under VSC
 p_SC  = {"A":10.0, "B":10.0, "C": 10.0} #additional lap time for driver A/B/C due to a pit stop under SC
 
+DRS_RANGE = 0.4
+
 g_AB1 = -0.4 # Initial time gap between A and B
 g_AC1 = -0.8 # Initial time gap between A and C
 
@@ -170,12 +172,12 @@ def lap_time(driver, n, tire_n, w, pitA, pitB, pitC, g_AB, g_AC, g_BC):
     IB = 1 if pitB else 0
     IC = 1 if pitC else 0
 
-    drs_AB = 1 if (0 <= g_AB <= 1) else 0
-    drs_BA = 1 if (-1 <= g_AB <= 0) else 0
-    drs_AC = 1 if (0 <= g_AC <= 1) else 0
-    drs_CA = 1 if (-1 <= g_AC <= 0) else 0
-    drs_BC = 1 if (0 <= g_BC <= 1) else 0
-    drs_CB = 1 if (-1 <= g_BC <= 0) else 0
+    drs_AB = 1 if (0 <= g_AB <= DRS_RANGE) else 0
+    drs_BA = 1 if (-DRS_RANGE <= g_AB <= 0) else 0
+    drs_AC = 1 if (0 <= g_AC <= DRS_RANGE) else 0
+    drs_CA = 1 if (-DRS_RANGE <= g_AC <= 0) else 0
+    drs_BC = 1 if (0 <= g_BC <= DRS_RANGE) else 0
+    drs_CB = 1 if (-DRS_RANGE <= g_BC <= 0) else 0
 
     eps_AB = g_AB + p0["A"] * IA - t_drs * drs_AB - (p0["B"] * IB - t_drs * drs_BA)
     eps_AC = g_AC + p0["A"] * IA - t_drs * drs_AC - (p0["C"] * IC - t_drs * drs_CA)
