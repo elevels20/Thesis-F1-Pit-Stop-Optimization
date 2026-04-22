@@ -6,7 +6,7 @@ from scipy.optimize import linprog
 import math
 
 # PARAMETERS
-N = 8 # Number of laps 
+N = 5 # Number of laps 
 # T = [1, 2, 3] # Tire compounds. 1 = Soft, 2 = Medium, 3 = Hard
 T = [1, 2] 
 T_cartesian = list(itertools.product(T, T))
@@ -15,10 +15,10 @@ T0 = [0] + T # 0 = no pit stop
 # u1 = 30 # Lifespan in number of laps for Soft tires
 # u2 = 40 # Lifespan in number of laps for Medium tires
 # u3 = 50 # Lifespan in number of laps for Hard tires
-u1 = 5
-u2 = 7
-# u1 = 3
-# u2 = 4
+# u1 = 5
+# u2 = 7
+u1 = 3
+u2 = 4
 # u3 = 5
 u = [u1, u2]
 
@@ -163,7 +163,7 @@ def lap_time(driver, n, tire_n, w, pitA, pitB, pitC, g_AB, g_AC, g_BC):
     drs_AC = 1 if (0 <= g_AC <= 1) else 0
     drs_CA = 1 if (-1 <= g_AC <= 0) else 0
     drs_BC = 1 if (0 <= g_BC <= 1) else 0
-    drs_CB = 1 if (-1 <= g_AB <= 0) else 0
+    drs_CB = 1 if (-1 <= g_BC <= 0) else 0
 
     eps_AB = g_AB + p0["A"] * IA - t_drs * drs_AB - (p0["B"] * IB - t_drs * drs_BA)
     eps_AC = g_AC + p0["A"] * IA - t_drs * drs_AC - (p0["C"] * IC - t_drs * drs_CA)
@@ -504,39 +504,8 @@ def simulate_race(pi_A, pi_BC, xA_star, xBC_star):
             a, b, c
         )
 
-    # Extract full final state
-    # tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC = state
-
-    # Ha = H(wA, u[tire_A - 1], mA)
-    # Hb = H(wB, u[tire_B - 1], mB)
-    # Hc = H(wC, u[tire_C - 1], mC)
-
-    # if Ha:
-        # if Hb:
-            # if Hc:
-                # All feasible → compare gaps
-                # if g_AB < 0 and g_AC < 0:
-                    # winner = "A"
-                # else:
-                    # winner = "BC"
-            # else:
-                # Only A and B feasible → compare A vs B
-                # winner = "A" if g_AB < 0 else "B"
-        # else:
-            # if Hc:
-                # Only A and C feasible → compare A vs C
-                # winner = "A" if g_AC < 0 else "C"
-            # else:
-                # Only A feasible
-                # winner = "A"
-    # elif (not Ha) and (not Hb) and (not Hc):
-        # winner = "tie"
-    # else:
-        # A infeasible but someone else feasible → A loses
-        # winner = "BC"
-
-
     # Other way: 
+    tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC = state
     val = V_end_new(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC)
 
     if val > 0:

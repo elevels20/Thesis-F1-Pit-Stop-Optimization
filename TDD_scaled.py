@@ -175,7 +175,7 @@ def lap_time(driver, n, tire_n, w, pitA, pitB, pitC, g_AB, g_AC, g_BC):
     drs_AC = 1 if (0 <= g_AC <= 1) else 0
     drs_CA = 1 if (-1 <= g_AC <= 0) else 0
     drs_BC = 1 if (0 <= g_BC <= 1) else 0
-    drs_CB = 1 if (-1 <= g_AB <= 0) else 0
+    drs_CB = 1 if (-1 <= g_BC <= 0) else 0
 
     eps_AB = g_AB + p0["A"] * IA - t_drs * drs_AB - (p0["B"] * IB - t_drs * drs_BA)
     eps_AC = g_AC + p0["A"] * IA - t_drs * drs_AC - (p0["C"] * IC - t_drs * drs_CA)
