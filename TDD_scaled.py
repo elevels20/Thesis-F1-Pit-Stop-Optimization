@@ -6,7 +6,7 @@ from scipy.optimize import linprog
 import math
 
 # PARAMETERS
-N = 5 # Number of laps 
+N = 10 # Number of laps 
 # T = [1, 2, 3] # Tire compounds. 1 = Soft, 2 = Medium, 3 = Hard
 T = [1, 2] 
 T_cartesian = list(itertools.product(T, T))
@@ -15,10 +15,10 @@ T0 = [0] + T # 0 = no pit stop
 # u1 = 30 # Lifespan in number of laps for Soft tires
 # u2 = 40 # Lifespan in number of laps for Medium tires
 # u3 = 50 # Lifespan in number of laps for Hard tires
-# u1 = 5
-# u2 = 7
-u1 = 3
-u2 = 4
+u1 = 5
+u2 = 7
+# u1 = 3
+# u2 = 4
 # u3 = 5
 u = [u1, u2]
 
@@ -31,14 +31,26 @@ h = 0.02 # Lap time reduction between two consecutive laps attributed to fuel co
 p_VSC = {"A":10.0, "B":10.0, "C": 10.0} # Additional lap time for driver A/B/C due to a pit stop under VSC
 p_SC  = {"A":10.0, "B":10.0, "C": 10.0} #additional lap time for driver A/B/C due to a pit stop under SC
 
-g_AB1 = -0.5 # Initial time gap between A and B
-g_AC1 = -1 # Initial time gap between A and C
+g_AB1 = -0.4 # Initial time gap between A and B
+g_AC1 = -0.8 # Initial time gap between A and C
 
 # gap discretization
-g_min = -1
-g_max = 1
-g_step = 0.5  
+g_min = -2
+g_max = 2
+g_step = 0.4  
 g_values = np.arange(g_min, g_max + g_step, g_step)
+
+# Scaling
+SCALE = 2 / 35
+
+p0 = {k: v * SCALE for k, v in p0.items()}
+p_SC = {k: v * SCALE for k, v in p_SC.items()}
+p_VSC = {k: v * SCALE for k, v in p_VSC.items()}
+h *= SCALE
+lambda_pen = 2.0 / SCALE
+
+# Fix baseline lap times
+d0 = {k: v * SCALE for k, v in d0.items()}
 
 z1 = 0.4
 z2 = 0.7
@@ -52,11 +64,11 @@ t_drs = 0.3
 # Tire-wear function
 def tire_wear(tire, w):
     if tire == 1:
-        return 0.004 * (w - 1) + 0.005 * ((w - 1) ** 2)
+        return SCALE * (0.004 * (w - 1) + 0.005 * ((w - 1) ** 2))
     elif tire == 2:
-        return 0.4 + 0.20 * w + 0.008 * (w ** 2)
+        return SCALE * (0.4 + 0.20 * w + 0.008 * (w ** 2))
     elif tire == 3:
-        return 0.9 + 0.10 * w + 0.0001 * (w ** 2)
+        return SCALE * (0.9 + 0.10 * w + 0.0001 * (w ** 2))
 
 # Interaction function
 def interaction_A(eps_AB, eps_AC):
