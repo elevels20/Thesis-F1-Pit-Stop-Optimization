@@ -38,6 +38,8 @@ p_SC  = {"A":10.0, "B":10.0} #additional lap time for driver A/B due to a pit st
 
 delta = 0.4 # Minimum time difference between drivers at the pit stop exit 
 
+DRS_RANGE = 0.2
+
 g1 = -0.4
 # g1 = -2.0
 
@@ -161,8 +163,8 @@ def lap_time_no_yellow_flag(driver, n, tire_n, w, pitA, pitB, g, y_DRS, Z1, Z2, 
     IA = 1 if pitA else 0
     IB = 1 if pitB else 0
 
-    drs_A = 1 if (0 <= g <= 1 and y_DRS == 0) else 0
-    drs_B = 1 if (-1 <= g <= 0 and y_DRS == 0) else 0
+    drs_A = 1 if (0 <= g <= DRS_RANGE and y_DRS == 0) else 0
+    drs_B = 1 if (-DRS_RANGE <= g <= 0 and y_DRS == 0) else 0
 
     eps = g + p0["A"] * IA - T_DRS * drs_A - (p0["B"] * IB - T_DRS * drs_B)
 
