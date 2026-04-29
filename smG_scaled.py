@@ -18,6 +18,8 @@ u1 = 10
 u2 = 15
 # u1 = 7
 # u2 = 9
+# u1 = 5
+# u2 = 7
 # u1 = 3
 # u2 = 4
 # u3 = 5
@@ -41,7 +43,7 @@ delta = 0.4 # Minimum time difference between drivers at the pit stop exit
 g1 = -0.4
 # g1 = -2.0
 
-DRS_RANGE = 0.5
+DRS_RANGE = 1.0
 
 # gap discretization
 # g_min = -35.0
@@ -49,25 +51,17 @@ DRS_RANGE = 0.5
 # g_step = 0.04
 # g_values = np.arange(g_min, g_max + g_step, g_step)
 
-g_min = -2
-g_max = 2
+# g_min = -2
+# g_max = 2
 # g_step = 0.4        
-g_step = 0.2        
+# g_step = 0.2        
+# g_values = np.arange(g_min, g_max + g_step, g_step)
+
+g_min = -2.5
+g_max = 2.5
+# g_step = 0.4        
+g_step = 0.15        
 g_values = np.arange(g_min, g_max + g_step, g_step)
-
-# Scaling
-SCALE = 2 / 35
-
-p0 = {k: v * SCALE for k, v in p0.items()}
-p_SC = {k: v * SCALE for k, v in p_SC.items()}
-p_VSC = {k: v * SCALE for k, v in p_VSC.items()}
-delta *= SCALE
-h *= SCALE
-lambda_pen = 2.0 / SCALE
-
-# Fix baseline lap times
-d0 = {k: v * SCALE for k, v in d0.items()}
-# d0 = {"A": 0.0, "B": (97.24 - 97.22) * SCALE}
 
 l_VSC = 2 # Laps that last a VSC
 l_SC = 3 # Laps that last a SC
@@ -104,6 +98,28 @@ TDRS_prob = [0.2, 0.7, 0.1]
 
 # TDRS_vals = [0.3]
 # TDRS_prob = [1.0]
+
+# Scaling
+# SCALE = 2 / 35
+# SCALE = 0.7
+# SCALE = 0.3
+SCALE = 0.2
+
+p0 = {k: v * SCALE for k, v in p0.items()}
+p_SC = {k: v * SCALE for k, v in p_SC.items()}
+p_VSC = {k: v * SCALE for k, v in p_VSC.items()}
+delta *= SCALE
+h *= SCALE
+# lambda_pen = 2.0 / SCALE
+d0 = {k: v * SCALE for k, v in d0.items()}
+d_VSC *= SCALE
+d_SC  *= SCALE
+SC_GAP = 0.5 * SCALE
+# DRS_RANGE *= SCALE
+# DRS_RANGE = 0.5
+DRS_RANGE = 0.4
+# TDRS_vals = [x * SCALE for x in TDRS_vals]
+g1 *= SCALE
 
 # state = (tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_DRS)
 
@@ -142,10 +158,10 @@ def lap_time_SC(g, driver, pitA, pitB):
         if xi == 1: # Driver A ends up ahead of B after the pit stop exit of a particular lap
             lap_time = d_SC + p_SC["A"] * IA
         else:
-            lap_time = d_SC + p_SC["A"] * IA - g + 0.5 # lap_time = d_SC + p_SC["B"] * IA - g + 0.5
+            lap_time = d_SC + p_SC["A"] * IA - g + SC_GAP # lap_time = d_SC + p_SC["B"] * IA - g + 0.5
     else:
         if xi == 1:
-            lap_time = d_SC + p_SC["B"] * IB + g + 0.5 # lap_time = d_SC + p_SC["A"] * IB + g + 0.5
+            lap_time = d_SC + p_SC["B"] * IB + g + SC_GAP # lap_time = d_SC + p_SC["A"] * IB + g + 0.5
         else:
             lap_time = d_SC + p_SC["B"] * IB
 
@@ -157,7 +173,7 @@ def g_next_under_SC(g, pitA, pitB):
 
     xi = 1 if (g + p_SC["A"] * IA - p_SC["B"] * IB) < 0 else 0
 
-    return 0.5 * (-1) ** xi
+    return SC_GAP * (-1) ** xi
 
 def lap_time_no_yellow_flag(driver, n, tire_n, w, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS):
     IA = 1 if pitA else 0
@@ -217,8 +233,14 @@ def m_next(m, decision, tire):
 def g_next(y_VSC, y_SC, n, tire_A_n, tire_B_n, wA, wB, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS):
     return g + final_lap_time(y_VSC, y_SC, "A", n, tire_A_n, wA, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS) - final_lap_time(y_VSC, y_SC, "B", n, tire_B_n, wB, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS)
     
+# def discretize_gap(g):
+    # return min(g_values, key=lambda x: abs(x - g))
+
 def discretize_gap(g):
-    return min(g_values, key=lambda x: abs(x - g))
+    # idx = int(round((g - g_min) / g_step))
+    idx = int((g - g_min) / g_step + 0.5)
+    idx = max(0, min(idx, len(g_values)-1))
+    return g_values[idx]
 
 def y_VSC_next(Y_VSC):
     return Y_VSC
