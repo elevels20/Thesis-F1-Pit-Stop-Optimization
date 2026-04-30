@@ -85,12 +85,12 @@ Z_prob = [1/3, 1/3, 1/3]
 TDRS_vals = [0.1, 0.3, 0.5]
 TDRS_prob = [0.2, 0.7, 0.1]
 
-# Z1_vals = [0.2, 0.4]
-# Z2_vals = [0.5, 0.7]
+# Z1_vals = [0.4, 0.6]
+# Z2_vals = [0.7, 0.9]
 # Z_prob = [1/2, 1/2]
 
-# TDRS_vals = [0.1, 0.3]
-# TDRS_prob = [0.22, 0.78]
+# TDRS_vals = [0.3, 0.5]
+# TDRS_prob = [0.88, 0.12]
 
 # Z1_vals = [0.4]
 # Z2_vals = [0.7]
@@ -237,10 +237,13 @@ def g_next(y_VSC, y_SC, n, tire_A_n, tire_B_n, wA, wB, pitA, pitB, g, y_DRS, Z1,
     # return min(g_values, key=lambda x: abs(x - g))
 
 def discretize_gap(g):
-    # idx = int(round((g - g_min) / g_step))
-    idx = int((g - g_min) / g_step + 0.5)
+    idx = int(round((g - g_min) / g_step))
+    # idx = int((g - g_min) / g_step + 0.5)
     idx = max(0, min(idx, len(g_values)-1))
     return g_values[idx]
+
+# def discretize_gap(g):
+    # return g_values[np.argmin(np.abs(g_values - g))]
 
 def y_VSC_next(Y_VSC):
     return Y_VSC
@@ -519,7 +522,7 @@ def solve_SDP(objective="gap"):
     # print('Solved Algorithm 1')
     # print('Number of states:', len(V))
 
-def simulate_race(pi_A, pi_B, xA_star, xB_star):
+def simulate_race(pi_A, pi_B, xA_star, xB_star, objective="gap"):
     # Initial state
     tA = np.random.choice(T, p=pi_A)
     tB = np.random.choice(T, p=pi_B)
@@ -574,23 +577,29 @@ def simulate_race(pi_A, pi_B, xA_star, xB_star):
             z1, z2, t_DRS
         )
 
-    # Final outcome
-    final_gap = state[6]
+    tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_DRS = state
 
-    if final_gap < 0:
+    history.append((N + 1, tire_A, tire_B))
+    gap_history.append(g)
+    yellow_history.append((y_VSC, y_SC))
+    pit_history.append((False, False, 0, 0))
+
+    val = V_end(tire_A, wA, mA, tire_B, wB, mB, g, objective)
+
+    if val < 0:
         winner = "A"
-    elif final_gap > 0:
+    elif val > 0:
         winner = "B"
     else:
         winner = "tie"
 
-    return final_gap, winner, history, gap_history, yellow_history, pit_history
+    return g, winner, history, gap_history, yellow_history, pit_history
 
-def run_simulations(U, pi_A, pi_B, xA_star, xB_star, n_sim=10000):
+def run_simulations(U, pi_A, pi_B, xA_star, xB_star, n_sim=10000, objective="gap"):
     results = []
 
     for _ in range(n_sim):
-        g_final, winner, _, _, _, _ = simulate_race(pi_A, pi_B, xA_star, xB_star)
+        g_final, winner, _, _, _, _ = simulate_race(pi_A, pi_B, xA_star, xB_star, objective)
         results.append((g_final, winner))
 
     gaps = np.array([r[0] for r in results])
@@ -683,20 +692,25 @@ def plot_sample_path(history, gap_history, yellow_history, pit_history):
 
     for i, (yV, yS) in enumerate(yellow_history + [(0, 0)]):  # append dummy to flush last block
         flag = 1 if yV > 0 else (2 if yS > 0 else 0)
-        end_lap = min(laps[i-1] + 1, N)
+        # end_lap = min(laps[i-1] + 1, N)
 
         if flag != current_flag:
             if current_flag != 0:
                 # Plot the previous block
+                start_lap = laps[start_idx]
+                end_lap = laps[i]
+
                 color = 'yellow' if current_flag == 1 else 'orange'
-                ax1.axvspan(laps[start_idx], end_lap, alpha=0.3, color=color) # Top plot
-                ax2.axvspan(laps[start_idx], end_lap, alpha=0.3, color=color) # Bottom plot
+                ax1.axvspan(start_lap, end_lap, alpha=0.3, color=color) # Top plot
+                ax2.axvspan(start_lap, end_lap, alpha=0.3, color=color) # Bottom plot
+
                 # Label in the middle of the block
-                ax1.text((laps[start_idx] + end_lap)/2, max(gap_history)*0.95, # Top plot
-                         "VSC" if current_flag == 1 else "SC",
+                mid = (start_lap + end_lap)/2
+                label = "VSC" if current_flag == 1 else "SC"
+
+                ax1.text(mid, max(gap_history)*0.95, label, # Top plot
                          ha='center', va='top', fontsize=9, color='black', rotation=90)
-                ax2.text((laps[start_idx] + end_lap)/2, max(gap_history)*0.95,  # Bottom plot
-                         "VSC" if current_flag == 1 else "SC",
+                ax2.text(mid, max(gap_history)*0.95, label, # Bottom plot
                          ha='center', va='top', fontsize=9, color='black', rotation=90)
             # start new block
             start_idx = i
@@ -710,9 +724,9 @@ def plot_sample_path(history, gap_history, yellow_history, pit_history):
     plt.tight_layout()
     plt.show()
     
-def get_sample_no_yellow(pi_A, pi_B, xA_star, xB_star):
+def get_sample_no_yellow(pi_A, pi_B, xA_star, xB_star, objective="gap"):
     while True:
-        _, _, h, g, y, p = simulate_race(pi_A, pi_B, xA_star, xB_star)
+        _, _, h, g, y, p = simulate_race(pi_A, pi_B, xA_star, xB_star, objective)
         if all(yV == 0 and yS == 0 for (yV, yS) in y):
             return h, g, y, p
 
@@ -722,9 +736,9 @@ def get_sample_no_yellow(pi_A, pi_B, xA_star, xB_star):
         # if any(yV > 0 for (yV, yS) in y):
             # return h, g, y, p
         
-def get_sample_with_yellow(pi_A, pi_B, xA_star, xB_star):
+def get_sample_with_yellow(pi_A, pi_B, xA_star, xB_star, objective="gap"):
     while True:
-        _, _, h, g, y, p = simulate_race(pi_A, pi_B, xA_star, xB_star)
+        _, _, h, g, y, p = simulate_race(pi_A, pi_B, xA_star, xB_star, objective)
         # Check for any yellow flag (VSC or SC)
         if any(yV > 0 or yS > 0 for (yV, yS) in y):
             return h, g, y, p
