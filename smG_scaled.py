@@ -57,10 +57,13 @@ DRS_RANGE = 1.0
 # g_step = 0.2        
 # g_values = np.arange(g_min, g_max + g_step, g_step)
 
-g_min = -2.5
-g_max = 2.5
-# g_step = 0.4        
-g_step = 0.15        
+# g_min = -2.5
+# g_max = 2.5
+g_min = -3.0
+g_max = -g_min
+# g_step = 0.4
+# g_step = 0.15
+g_step = 0.2
 g_values = np.arange(g_min, g_max + g_step, g_step)
 
 l_VSC = 2 # Laps that last a VSC
@@ -78,19 +81,19 @@ k_VSC = 2 # Number of laps needed to be raced after the end of a VSC to enable t
 k_SC = 2 # Number of laps needed to be raced after the end of a SC to enable the DRS
 
 # RANDOM VARIABLES
-Z1_vals = [0.2, 0.4, 0.6] 
-Z2_vals = [0.5, 0.7, 0.9]
-Z_prob = [1/3, 1/3, 1/3]
+# Z1_vals = [0.2, 0.4, 0.6] 
+# Z2_vals = [0.5, 0.7, 0.9]
+# Z_prob = [1/3, 1/3, 1/3]
 
-TDRS_vals = [0.1, 0.3, 0.5]
-TDRS_prob = [0.2, 0.7, 0.1]
+# TDRS_vals = [0.1, 0.3, 0.5]
+# TDRS_prob = [0.2, 0.7, 0.1]
 
-# Z1_vals = [0.4, 0.6]
-# Z2_vals = [0.7, 0.9]
-# Z_prob = [1/2, 1/2]
+Z1_vals = [0.4, 0.6]
+Z2_vals = [0.7, 0.9]
+Z_prob = [1/2, 1/2]
 
-# TDRS_vals = [0.3, 0.5]
-# TDRS_prob = [0.88, 0.12]
+TDRS_vals = [0.3, 0.5]
+TDRS_prob = [0.88, 0.12]
 
 # Z1_vals = [0.4]
 # Z2_vals = [0.7]
@@ -101,25 +104,29 @@ TDRS_prob = [0.2, 0.7, 0.1]
 
 # Scaling
 # SCALE = 2 / 35
-# SCALE = 0.7
-# SCALE = 0.3
 SCALE = 0.2
+# SCALE = 0.1
 
 p0 = {k: v * SCALE for k, v in p0.items()}
 p_SC = {k: v * SCALE for k, v in p_SC.items()}
 p_VSC = {k: v * SCALE for k, v in p_VSC.items()}
-delta *= SCALE
+# delta *= SCALE
+delta = g_step
 h *= SCALE
 # lambda_pen = 2.0 / SCALE
+# lambda_pen = 2.0 / 0.5
 d0 = {k: v * SCALE for k, v in d0.items()}
 d_VSC *= SCALE
 d_SC  *= SCALE
-SC_GAP = 0.5 * SCALE
+# SC_GAP = 0.5 * SCALE
+SC_GAP = g_step
 # DRS_RANGE *= SCALE
 # DRS_RANGE = 0.5
-DRS_RANGE = 0.4
+DRS_RANGE = 0.5
 # TDRS_vals = [x * SCALE for x in TDRS_vals]
-g1 *= SCALE
+# TDRS_vals = [x * 0.5 for x in TDRS_vals]
+# g1 *= SCALE
+g1 = -g_step
 
 # state = (tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_DRS)
 
@@ -378,10 +385,10 @@ def generate_states(n):
 def solve_SDP(objective="gap"):
     # Step 3: Compute 𝑉 ′^{*} _N+1(s_n) for all s_n ∈ S_N+1
     states_final = generate_states(N + 1) 
-    V = {state: 0 for state in states_final}
+    V_star = {state: 0 for state in states_final}
     for state in states_final:
         tire_A, wA, mA, tire_B, wB, mB, g, _, _, _ = state
-        V[state] = V_end(tire_A, wA, mA, tire_B, wB, mB, g, objective)
+        V_star[state] = V_end(tire_A, wA, mA, tire_B, wB, mB, g, objective)
 
     # Policies
     xA_star = {}
@@ -401,7 +408,7 @@ def solve_SDP(objective="gap"):
         else:
             T_allowed = T0
 
-        V_new = {}
+        V_star_new = {}
         states = generate_states(n)
         for state in states:
             tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_DRS = state
@@ -417,7 +424,7 @@ def solve_SDP(objective="gap"):
                             state_n = state_next(tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_VSC_n, y_SC_n, y_DRS, n, a, b, z1, z2, t_DRS)
 
                             prob = p_rv * p_y
-                            val += prob * V[state_n]                                    
+                            val += prob * V_star[state_n]                                    
 
                     V_prime[(a, b)] = val
 
@@ -429,7 +436,7 @@ def solve_SDP(objective="gap"):
                 a_star = min(T_allowed, key=lambda a: V_prime[(a, b_star[a])])
 
                 # Step 10: value update
-                V_new[state] = V_prime[(a_star, b_star[a_star])]
+                V_star_new[state] = V_prime[(a_star, b_star[a_star])]
 
                 xA_star[(n, state)] = a_star
                 xB_star[(n, state)] = b_star[a_star]
@@ -442,12 +449,13 @@ def solve_SDP(objective="gap"):
                 b_star = max(T_allowed, key=lambda b: V_prime[(a_star[b], b)])
 
                 # Step 14: value update
-                V_new[state] = V_prime[(a_star[b_star], b_star)]
+                V_star_new[state] = V_prime[(a_star[b_star], b_star)]
 
                 xA_star[(n, state)] = a_star[b_star]
                 xB_star[(n, state)] = b_star
     
-        V = V_new
+        V_star = V_star_new
+
     # return V, xA_star, xB_star
 
     nT = len(T)
@@ -460,7 +468,7 @@ def solve_SDP(objective="gap"):
     for i, tA in enumerate(T):
         for j, tB in enumerate(T):
             s1 = (tA, 0, 0, tB, 0, 0, g_init, 0, 0, 2)
-            U[i, j] = V[s1]
+            U[i, j] = V_star[s1] 
 
     # Step 16: solve zero-sum game via LP   
     # Player B (E.3)
@@ -644,8 +652,8 @@ def plot_sample_path(history, gap_history, yellow_history, pit_history):
 
     # TOP: pit strategy
     # horizontal dashed lines
-    ax1.hlines(1, 1, N, linestyles='dashed', color='black')
-    ax1.hlines(0, 1, N, linestyles='dashed', color='black')
+    ax1.hlines(1, 1, N + 1, linestyles='dashed', color='black')
+    ax1.hlines(0, 1, N + 1, linestyles='dashed', color='black')
 
     # color mapping
     tire_colors = {
@@ -698,7 +706,8 @@ def plot_sample_path(history, gap_history, yellow_history, pit_history):
             if current_flag != 0:
                 # Plot the previous block
                 start_lap = laps[start_idx]
-                end_lap = laps[i]
+                # end_lap = laps[i]
+                end_lap = min(laps[i-1] + 1, N + 1)
 
                 color = 'yellow' if current_flag == 1 else 'orange'
                 ax1.axvspan(start_lap, end_lap, alpha=0.3, color=color) # Top plot
