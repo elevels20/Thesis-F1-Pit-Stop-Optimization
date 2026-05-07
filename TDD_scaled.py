@@ -1,4 +1,4 @@
-# NO APPENDIX G!!!
+# with appendix G
 import numpy as np
 import matplotlib.pyplot as plt
 import itertools
@@ -31,7 +31,10 @@ h = 0.02 # Lap time reduction between two consecutive laps attributed to fuel co
 p_VSC = {"A":10.0, "B":10.0, "C": 10.0} # Additional lap time for driver A/B/C due to a pit stop under VSC
 p_SC  = {"A":10.0, "B":10.0, "C": 10.0} #additional lap time for driver A/B/C due to a pit stop under SC
 
-DRS_RANGE = 0.4
+# DRS_RANGE = 0.4
+DRS_RANGE = 1.0
+
+delta = 0.4
 
 g_AB1 = -0.4 # Initial time gap between A and B
 g_AC1 = -0.8 # Initial time gap between A and C
@@ -43,21 +46,41 @@ g_step = 0.4
 g_values = np.arange(g_min, g_max + g_step, g_step)
 
 # Scaling
-SCALE = 2 / 35
+# SCALE = 2 / 35
 
-p0 = {k: v * SCALE for k, v in p0.items()}
-p_SC = {k: v * SCALE for k, v in p_SC.items()}
-p_VSC = {k: v * SCALE for k, v in p_VSC.items()}
-h *= SCALE
-lambda_pen = 2.0 / SCALE
+# p0 = {k: v * SCALE for k, v in p0.items()}
+# p_SC = {k: v * SCALE for k, v in p_SC.items()}
+# p_VSC = {k: v * SCALE for k, v in p_VSC.items()}
+# h *= SCALE
+# lambda_pen = 2.0 / SCALE
 
 # Fix baseline lap times
-d0 = {k: v * SCALE for k, v in d0.items()}
+# d0 = {k: v * SCALE for k, v in d0.items()}
 
 z1 = 0.4
 z2 = 0.7
 
-t_drs = 0.3
+# t_drs = 0.3
+t_drs = 0.5
+
+SCALE = 0.2
+
+p0 = {k: v * SCALE for k, v in p0.items()}
+p_SC = {k: v * SCALE for k, v in p_SC.items()}
+p_VSC = {k: v * SCALE for k, v in p_VSC.items()}
+# delta *= SCALE
+delta = g_step
+h *= SCALE
+# lambda_pen = 2.0 / SCALE
+d0 = {k: v * SCALE for k, v in d0.items()}
+# d_VSC *= SCALE
+# d_SC  *= SCALE
+# SC_GAP = 0.5 * SCALE
+# DRS_RANGE *= SCALE
+DRS_RANGE = 0.5
+# t_drs *= SCALE
+g_AB1 = -g_step
+g_AC1 = - 2 * g_step
 
 # state = (tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC)
 
@@ -71,101 +94,23 @@ def tire_wear(tire, w):
         return SCALE * (0.4 + 0.20 * w + 0.008 * (w ** 2))
     elif tire == 3:
         return SCALE * (0.9 + 0.10 * w + 0.0001 * (w ** 2))
+    
+def interaction_pair(eps):
+    if eps < 0:
+        return np.exp(-lambda_pen * abs(min(-delta, eps))) * z1
+    else:
+        return np.exp(-lambda_pen * abs(max(delta, eps))) * z2
 
-# Interaction function
 def interaction_A(eps_AB, eps_AC):
-    interaction_AB = 0
-    interaction_AC = 0
-
-    if eps_AB < 0:
-        interaction_AB = np.exp(-lambda_pen * abs(eps_AB)) * z1
-    else:
-        interaction_AB = np.exp(-lambda_pen * abs(eps_AB)) * z2
-
-    if eps_AC < 0:
-        interaction_AC = np.exp(-lambda_pen * abs(eps_AC)) * z1
-    else:
-        interaction_AC = np.exp(-lambda_pen * abs(eps_AC)) * z2
-
-    return interaction_AB + interaction_AC
+    return interaction_pair(eps_AB) + interaction_pair(eps_AC)
 
 def interaction_B(eps_AB, eps_BC):
-    interaction_BA = 0
-    interaction_BC = 0
-
-    if eps_AB >= 0:
-        interaction_BA = np.exp(-lambda_pen * abs(eps_AB)) * z1
-    else:
-        interaction_BA = np.exp(-lambda_pen * abs(eps_AB)) * z2
-
-    if eps_BC < 0:
-        interaction_BC = np.exp(-lambda_pen * abs(eps_BC)) * z1
-    else:
-        interaction_BC = np.exp(-lambda_pen * abs(eps_BC)) * z2
-
-    return interaction_BA + interaction_BC
+    return interaction_pair(-eps_AB) + interaction_pair(eps_BC)
 
 def interaction_C(eps_AC, eps_BC):
-    interaction_CA = 0
-    interaction_CB = 0
-
-    if eps_AC >= 0:
-        interaction_CA = np.exp(-lambda_pen * abs(eps_AC)) * z1
-    else:
-        interaction_CA = np.exp(-lambda_pen * abs(eps_AC)) * z2
-
-    if eps_BC >= 0:
-        interaction_CB = np.exp(-lambda_pen * abs(eps_BC)) * z1
-    else:
-        interaction_CB = np.exp(-lambda_pen * abs(eps_BC)) * z2
-
-    return interaction_CA + interaction_CB
+    return interaction_pair(-eps_AC) + interaction_pair(-eps_BC)
 
 # Lap time functions
-
-def driver_order(g_AB, g_AC, g_BC, pitA, pitB, pitC):
-    IA = 1 if pitA else 0
-    IB = 1 if pitB else 0
-    IC = 1 if pitC else 0
-
-    xi_AB = 1 if (g_AB + p_SC["A"] * IA - p_SC["B"] * IB) < 0 else 0  # 1 if driver A ends up ahead of B after the pit stop exit of a particular lap
-    xi_AC = 1 if (g_AC + p_SC["A"] * IA - p_SC["C"] * IC) < 0 else 0  # 1 if driver A ends up ahead of C after the pit stop exit of a particular lap
-    xi_BC = 1 if (g_BC + p_SC["B"] * IB - p_SC["C"] * IC) < 0 else 0  # 1 if driver B ends up ahead of C after the pit stop exit of a particular lap
-
-    if xi_AB == 1:
-        if xi_AC == 1:
-            P1 = "A"
-            if xi_BC == 1:
-                P2 = "B"
-                P3 = "C"
-            else:
-                P2 = "C"
-                P3 = "B"
-        else:
-            if xi_BC == 1:
-                raise ValueError("Order of drivers not possible")
-            else:
-                P1 = "C"
-                P2 = "A"
-                P3 = "B"
-    else:
-        if xi_BC == 1:
-            P1 = "B"
-            if xi_AC == 1:
-                P2 = "A"
-                P3 = "C"
-            else:
-                P2 = "C"
-                P3 = "A"
-        else:
-            if xi_AC == 1:
-                raise ValueError("Order of drivers not possible")
-            else:
-                P1 = "C"
-                P2 = "B"
-                P3 = "A"
-
-    return (P1, P2, P3)
 
 def lap_time(driver, n, tire_n, w, pitA, pitB, pitC, g_AB, g_AC, g_BC): 
     IA = 1 if pitA else 0
@@ -183,22 +128,49 @@ def lap_time(driver, n, tire_n, w, pitA, pitB, pitC, g_AB, g_AC, g_BC):
     eps_AC = g_AC + p0["A"] * IA - t_drs * drs_AC - (p0["C"] * IC - t_drs * drs_CA)
     eps_BC = g_BC + p0["B"] * IB - t_drs * drs_BC - (p0["C"] * IC - t_drs * drs_CB)
 
+    min_gap = 0
+
     if driver == "A":
         eta = interaction_A(eps_AB, eps_AC)
         pit = pitA
         drs = 1 if (0 <= g_AB <= 1 or 0 <= g_AC <= 1) else 0
+
+        # A vs B
+        if eps_AB > 0:
+            min_gap += max(delta - eps_AB, 0)
+
+        # A vs C
+        if eps_AC > 0:
+            min_gap += max(delta - eps_AC, 0)
+            
     elif driver == "B":
         eta = interaction_B(eps_AB, eps_BC)
         pit = pitB
         drs = 1 if (-1 <= g_AB <= 0 or 0 <= g_BC <= 1) else 0
+
+        # B vs A
+        if eps_AB <= 0:
+            min_gap += max(delta + eps_AB, 0)
+
+        # B vs C
+        if eps_BC > 0:
+            min_gap += max(delta - eps_BC, 0)
     else:
         eta = interaction_C(eps_AC, eps_BC)
         pit = pitC
         drs = 1 if (-1 <= g_AC <= 0 or -1 <= g_BC <= 0) else 0
 
+        # C vs A
+        if eps_AC <= 0:
+            min_gap += max(delta + eps_AC, 0)
+
+        # C vs B
+        if eps_BC <= 0:
+            min_gap += max(delta + eps_BC, 0)
+
     gamma = d0[driver] + (p0[driver] if pit else 0) + tire_wear(tire_n, w) - h * n
-    
-    return gamma + eta - t_drs * drs
+
+    return gamma + eta - t_drs * drs + min_gap
     
 # State functions
 def t_next(tire, decision):
@@ -227,8 +199,17 @@ def g_AC_next(n, tire_A_n, tire_C_n, wA, wC, pitA, pitB, pitC, g_AB, g_AC, g_BC)
 def g_BC_next(g_AB_n, g_AC_n):
     return g_AC_n - g_AB_n
     
+# def discretize_gap(g):
+    # return min(g_values, key=lambda x: abs(x - g))
+
 def discretize_gap(g):
-    return min(g_values, key=lambda x: abs(x - g))
+    idx = int(round((g - g_min) / g_step))
+    # idx = int((g - g_min) / g_step + 0.5)
+    idx = max(0, min(idx, len(g_values)-1))
+    return g_values[idx]
+
+# def discretize_gap(g):
+    # return g_values[np.argmin(np.abs(g_values - g))]
     
 def state_next(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC, n, decisionA, decisionB, decisionC):
     tire_A_n = t_next(tire_A, decisionA)
@@ -349,11 +330,11 @@ def generate_states(n):
 def solve_SDP():
     # Step 3: Compute 𝑉 ′^{*} _N+1(s_n) for all s_n ∈ S_N+1
     states_final = generate_states(N + 1) 
-    V = {state: 0 for state in states_final}
+    V_star = {state: 0 for state in states_final}
     for state in states_final:
         tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC = state
         # V[state] = V_end(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC)
-        V[state] = V_end_new(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC)
+        V_star[state] = V_end_new(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC)
 
     # Policies
     xA_star = {}
@@ -367,7 +348,7 @@ def solve_SDP():
 
         T_allowed_cartesian = list(itertools.product(T_allowed, T_allowed))
 
-        V_new = {}
+        V_star_new = {}
         states = generate_states(n)
         for state in states:
             tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC = state
@@ -379,7 +360,7 @@ def solve_SDP():
                     val = 0
                     state_n = state_next(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC, n, a, b, c)
 
-                    val += V[state_n]                                    
+                    val += V_star[state_n]                                    
 
                     V_prime[(a, (b, c))] = val
 
@@ -391,7 +372,7 @@ def solve_SDP():
                 a_star = min(T_allowed, key=lambda a: V_prime[(a, bc_star[a])])
 
                 # Step 10: value update
-                V_new[state] = V_prime[(a_star, bc_star[a_star])]
+                V_star_new[state] = V_prime[(a_star, bc_star[a_star])]
 
                 xA_star[(n, state)] = a_star
                 xBC_star[(n, state)] = bc_star[a_star]
@@ -404,12 +385,12 @@ def solve_SDP():
                 bc_star = max(T_allowed_cartesian, key=lambda bc: V_prime[(a_star[bc], bc)])
 
                 # Step 14: value update
-                V_new[state] = V_prime[(a_star[bc_star], bc_star)]
+                V_star_new[state] = V_prime[(a_star[bc_star], bc_star)]
 
                 xA_star[(n, state)] = a_star[bc_star]
                 xBC_star[(n, state)] = bc_star
     
-        V = V_new
+        V_star = V_star_new
 
 
     nT = len(T)
@@ -424,7 +405,7 @@ def solve_SDP():
     for i, tA in enumerate(T):
         for j, (tB, tC) in enumerate(T_cartesian):
             s1 = (tA, 0, 0, tB, 0, 0, tC, 0, 0, g_AB_init, g_AC_init)
-            U[i, j] = V[s1]
+            U[i, j] = V_star[s1]
 
     # Step 16: solve zero-sum game via LP   
     # Players (B, C) (E.3)
@@ -518,8 +499,11 @@ def simulate_race(pi_A, pi_BC, xA_star, xBC_star):
             a, b, c
         )
 
-    # Other way: 
     tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC = state
+    history.append((N + 1, tire_A, tire_B, tire_C))
+    gap_history.append((g_AB, g_AC))
+    pit_history.append((False, False, False, 0, 0, 0))
+
     val = V_end_new(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC)
 
     if val > 0:
@@ -529,7 +513,6 @@ def simulate_race(pi_A, pi_BC, xA_star, xBC_star):
     else:
         winner = "tie"
  
-
     return (g_AB, g_AC), winner, history, gap_history, pit_history
 
 def run_simulations(U, pi_A, pi_BC, xA_star, xBC_star, n_sim=10000):
@@ -626,7 +609,7 @@ def plot_sample_path(history, gap_history, pit_history):
     # horizontal dashed lines
     # ax1.hlines(1, 1, N, linestyles='dashed')
     # ax1.hlines(0, 1, N, linestyles='dashed')
-    ax1.hlines([2,1,0], 1, N, linestyles='dashed', color='black')  # horizontal guides for C, A, B
+    ax1.hlines([2,1,0], 1, N + 1, linestyles='dashed', color='black')  # horizontal guides for C, A, B
 
 
     # color mapping
