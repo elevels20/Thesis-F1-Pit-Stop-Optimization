@@ -20,7 +20,10 @@ u2 = 7
 # u1 = 3
 # u2 = 4
 # u3 = 5
-u = [u1, u2]
+u = {
+    1: u1,
+    2: u2
+}
 
 d0 = {"A":97.22, "B":97.24, "C": 97.20} # Lap time for driver A/B/C when using new soft compound tires at the beginning of the race (without pit stops, interactions, or DRS)
 p0 = {"A":20.2, "B":20.0, "C": 20.4} # Additional lap time for driver A/B/C due to a pit stop
@@ -216,9 +219,9 @@ def state_next(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC, n, de
     tire_B_n = t_next(tire_B, decisionB)
     tire_C_n = t_next(tire_C, decisionC)
 
-    wA_n = w_next(wA, decisionA, u[tire_A - 1])
-    wB_n = w_next(wB, decisionB, u[tire_B - 1])
-    wC_n = w_next(wC, decisionC, u[tire_C - 1])
+    wA_n = w_next(wA, decisionA, u[tire_A])
+    wB_n = w_next(wB, decisionB, u[tire_B])
+    wC_n = w_next(wC, decisionC, u[tire_C])
 
     mA_n = m_next(mA, decisionA, tire_A)
     mB_n = m_next(mB, decisionB, tire_B)
@@ -250,9 +253,9 @@ def H(w, u, m):
     return w <= u and m == 1
 
 def V_end(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC):
-    Ha = H(wA, u[tire_A - 1], mA)
-    Hb = H(wB, u[tire_B - 1], mB)
-    Hc = H(wC, u[tire_C - 1], mC)
+    Ha = H(wA, u[tire_A], mA)
+    Hb = H(wB, u[tire_B], mB)
+    Hc = H(wC, u[tire_C], mC)
 
     if Ha:
         if Hb:
@@ -271,9 +274,9 @@ def V_end(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC):
         return math.inf
 
 def V_end_new(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC):
-    Ha = H(wA, u[tire_A - 1], mA)
-    Hb = H(wB, u[tire_B - 1], mB)
-    Hc = H(wC, u[tire_C - 1], mC)
+    Ha = H(wA, u[tire_A], mA)
+    Hb = H(wB, u[tire_B], mB)
+    Hc = H(wC, u[tire_C], mC)
 
     if Ha:
         if Hb and Hc:
@@ -294,13 +297,13 @@ def generate_states(n):
         for tire_B in T:
             for tire_C in T:
 
-                for wA in range(u[tire_A - 1] + 2):
+                for wA in range(u[tire_A] + 2):
                     if wA > n: # tire wear cannot be higher than current lap
                         continue
-                    for wB in range(u[tire_B - 1] + 2):
+                    for wB in range(u[tire_B] + 2):
                         if wB > n: # tire wear cannot be higher than current lap
                             continue
-                        for wC in range(u[tire_C - 1] + 2):
+                        for wC in range(u[tire_C] + 2):
                             if wC > n: # tire wear cannot be higher than current lap
                                 continue
 
