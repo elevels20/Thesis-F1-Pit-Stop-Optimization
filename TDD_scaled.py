@@ -9,6 +9,7 @@ import math
 N = 10 # Number of laps 
 # T = [1, 2, 3] # Tire compounds. 1 = Soft, 2 = Medium, 3 = Hard
 T = [1, 2] 
+# T = [1, 3]
 T_cartesian = list(itertools.product(T, T))
 T0 = [0] + T # 0 = no pit stop
 
@@ -17,6 +18,7 @@ T0 = [0] + T # 0 = no pit stop
 # u3 = 50 # Lifespan in number of laps for Hard tires
 u1 = 5
 u2 = 7
+u3 = 8
 # u1 = 3
 # u2 = 4
 # u3 = 5
@@ -24,15 +26,17 @@ u = {
     1: u1,
     2: u2
 }
+# u = {
+    # 1: u1,
+    # 2: u2,
+    # 3: u3
+# }
 
 d0 = {"A":97.22, "B":97.24, "C": 97.20} # Lap time for driver A/B/C when using new soft compound tires at the beginning of the race (without pit stops, interactions, or DRS)
 p0 = {"A":20.2, "B":20.0, "C": 20.4} # Additional lap time for driver A/B/C due to a pit stop
 
 lambda_pen = 2.0
 h = 0.02 # Lap time reduction between two consecutive laps attributed to fuel consumption (making the car lighter)
-
-p_VSC = {"A":10.0, "B":10.0, "C": 10.0} # Additional lap time for driver A/B/C due to a pit stop under VSC
-p_SC  = {"A":10.0, "B":10.0, "C": 10.0} #additional lap time for driver A/B/C due to a pit stop under SC
 
 # DRS_RANGE = 0.4
 DRS_RANGE = 1.0
@@ -43,8 +47,8 @@ g_AB1 = -0.4 # Initial time gap between A and B
 g_AC1 = -0.8 # Initial time gap between A and C
 
 # gap discretization
-g_min = -2
-g_max = 2
+g_max = 2.0
+g_min = -g_max
 g_step = 0.4  
 g_values = np.arange(g_min, g_max + g_step, g_step)
 
@@ -69,8 +73,6 @@ t_drs = 0.5
 SCALE = 0.2
 
 p0 = {k: v * SCALE for k, v in p0.items()}
-p_SC = {k: v * SCALE for k, v in p_SC.items()}
-p_VSC = {k: v * SCALE for k, v in p_VSC.items()}
 # delta *= SCALE
 delta = g_step
 h *= SCALE
@@ -243,8 +245,7 @@ def state_next(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC, n, de
 
     return (tire_A_n, wA_n, mA_n, tire_B_n, wB_n, mB_n, tire_C_n, wC_n, mC_n, g_AB_n, g_AC_n)
 
-
-# Stochastic dynamic programming
+# Dynamic programming
 def H(w, u, m): 
     """
     Returns whether the driver finishes the race adequately without using tires 
@@ -252,41 +253,43 @@ def H(w, u, m):
     """
     return w <= u and m == 1
 
-def V_end(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC):
+def V_end(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC, objective):
     Ha = H(wA, u[tire_A], mA)
     Hb = H(wB, u[tire_B], mB)
     Hc = H(wC, u[tire_C], mC)
 
-    if Ha:
-        if Hb:
-            if Hc:
+    if objective == "all":
+        if Ha:
+            if Hb and Hc:
                 return max(g_AB, g_AC)
             else:
-                return g_AB
+                # return - math.inf
+                return g_min
+        elif (not Ha) and (not Hb) and (not Hc):
+            return 0
         else:
-            if Hc:
-                return g_AC
+            # return math.inf
+            return g_max
+    elif objective == "simple":
+        if Ha:
+            if Hb:
+                if Hc:
+                    return max(g_AB, g_AC)
+                else:
+                    return g_AB
             else:
-                return - math.inf
-    elif (not Ha) and (not Hb) and (not Hc):
-        return 0
-    else:
-        return math.inf
-
-def V_end_new(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC):
-    Ha = H(wA, u[tire_A], mA)
-    Hb = H(wB, u[tire_B], mB)
-    Hc = H(wC, u[tire_C], mC)
-
-    if Ha:
-        if Hb and Hc:
-            return max(g_AB, g_AC)
+                if Hc:
+                    return g_AC
+                else:
+                    # return - math.inf
+                    return g_min
+        elif (not Ha) and (not Hb) and (not Hc):
+            return 0
         else:
-                return - math.inf
-    elif (not Ha) and (not Hb) and (not Hc):
-        return 0
+            # return math.inf
+            return g_max
     else:
-        return math.inf
+        raise ValueError("Unknown objective: choose 'all' or 'simple'")
 
 # state = (tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC)
 
@@ -329,15 +332,15 @@ def generate_states(n):
 
     return states
 
-# Stochastic Dynamic Programming Algorithm
-def solve_SDP():
+# Dynamic Programming Algorithm
+def solve_DP(objective="all"):
     # Step 3: Compute 𝑉 ′^{*} _N+1(s_n) for all s_n ∈ S_N+1
     states_final = generate_states(N + 1) 
     V_star = {state: 0 for state in states_final}
     for state in states_final:
         tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC = state
         # V[state] = V_end(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC)
-        V_star[state] = V_end_new(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC)
+        V_star[state] = V_end(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC, objective)
 
     # Policies
     xA_star = {}
@@ -360,6 +363,55 @@ def solve_SDP():
             V_prime = {}
             for a in T_allowed:
                 for b,c in T_allowed_cartesian:
+                    # Feasibility checks
+                    # This is an intermediate check for H, that checks if tires do not get used longer than their lifespans
+                    A_infeas = (a == 0 and wA >= u[tire_A])
+                    B_infeas = (b == 0 and wB >= u[tire_B])
+                    C_infeas = (c == 0 and wC >= u[tire_C])
+
+                    if objective == "all":
+                        # A feasible iff A feasible
+                        # BC feasible iff BOTH B and C feasible
+
+                        if A_infeas:
+                            if B_infeas and C_infeas:
+                                # everyone infeasible
+                                V_prime[(a, (b, c))] = 0
+                                continue
+                            else:
+                                # only A infeasible
+                                # BC wins
+                                V_prime[(a, (b, c))] = g_max
+                                continue
+                        else:
+                            # A feasible
+                            if B_infeas or C_infeas:
+                                # BC infeasible
+                                # A wins
+                                V_prime[(a, (b, c))] = g_min
+                                continue
+
+                    elif objective == "simple":
+                        # BC feasible iff at least one of B or C feasible
+                        BC_infeas = B_infeas and C_infeas
+                        if A_infeas:
+                            if BC_infeas:
+                                # everyone infeasible
+                                V_prime[(a, (b, c))] = 0
+                                continue
+                            else:
+                                # only A infeasible
+                                V_prime[(a, (b, c))] = g_max
+                                continue
+                        else:
+                            # A feasible
+                            if BC_infeas:
+                                # both B and C infeasible
+                                V_prime[(a, (b, c))] = g_min
+                                continue
+                    else:
+                        raise ValueError("Unknown objective")
+
                     val = 0
                     state_n = state_next(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC, n, a, b, c)
 
@@ -411,7 +463,7 @@ def solve_SDP():
             U[i, j] = V_star[s1]
 
     # Step 16: solve zero-sum game via LP   
-    # Players (B, C) (E.3)
+    # Players (B, C) 
 
     # Variables: [π_BC (nT_cartesian), ρ]
     c = np.zeros(nT_cartesian + 1) # Coefficients of the objective function to minimize.
@@ -420,7 +472,6 @@ def solve_SDP():
     A_ub = [] # Coefficients for the inequality constraints 
     b_ub = [] # Right-hand side values for the inequality constraints.
 
-    # ρ - (U π_BC)_i ≤ 0  →  -U[i,:] π_BC + ρ ≤ 0
     for i in range(nT):
         A_ub.append([-U[i, j] for j in range(nT_cartesian)] + [1])
         b_ub.append(0)
@@ -434,7 +485,7 @@ def solve_SDP():
 
     pi_BC = resB.x[:-1]
 
-    # Player A (E.4)
+    # Player A
     # Variables: [π_A (nT), ρ]
     c = np.zeros(nT + 1)
     c[-1] = 1  # minimize ρ
@@ -442,7 +493,6 @@ def solve_SDP():
     A_ub = []
     b_ub = []
 
-    # ρ - (U^T π_A)_i ≥ 0  →  (U^T π_A)_i - ρ ≤ 0
     for i in range(nT_cartesian):
         A_ub.append([U[j, i] for j in range(nT)] + [-1])
         b_ub.append(0)
@@ -459,7 +509,7 @@ def solve_SDP():
     return U, pi_A, pi_BC, xA_star, xBC_star
 
 
-def simulate_race(pi_A, pi_BC, xA_star, xBC_star):
+def simulate_race(pi_A, pi_BC, xA_star, xBC_star, objective="all"):
     # Initial state
     tA = np.random.choice(T, p=pi_A)
 
@@ -507,7 +557,7 @@ def simulate_race(pi_A, pi_BC, xA_star, xBC_star):
     gap_history.append((g_AB, g_AC))
     pit_history.append((False, False, False, 0, 0, 0))
 
-    val = V_end_new(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC)
+    val = V_end(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC, objective)
 
     if val > 0:
         winner = "BC"
@@ -518,11 +568,11 @@ def simulate_race(pi_A, pi_BC, xA_star, xBC_star):
  
     return (g_AB, g_AC), winner, history, gap_history, pit_history
 
-def run_simulations(U, pi_A, pi_BC, xA_star, xBC_star, n_sim=10000):
+def run_simulations(U, pi_A, pi_BC, xA_star, xBC_star, n_sim=10000, objective="all"):
     results = []
 
     for _ in range(n_sim):
-        g_final, winner, _, _, _ = simulate_race(pi_A, pi_BC, xA_star, xBC_star)
+        g_final, winner, _, _, _ = simulate_race(pi_A, pi_BC, xA_star, xBC_star, objective)
         results.append((g_final, winner))
 
     g_AB = np.array([r[0][0] for r in results])
