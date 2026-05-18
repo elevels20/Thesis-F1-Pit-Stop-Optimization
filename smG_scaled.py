@@ -6,7 +6,8 @@ import math
 # PARAMETERS
 N = 20 # Number of laps 
 # T = [1, 2, 3] # Tire compounds. 1 = Soft, 2 = Medium, 3 = Hard
-T = [1, 2]
+# T = [1, 2]
+T = [1, 3]
 T0 = [0] + T # 0 = no pit stop
 
 # u1 = 30 # Lifespan in number of laps for Soft tires
@@ -14,12 +15,14 @@ T0 = [0] + T # 0 = no pit stop
 # u3 = 50 # Lifespan in number of laps for Hard tires
 # u1 = 15
 # u2 = 25
-u1 = 10
-u2 = 15
+u1 = 10 # This one for N = 20
+# u2 = 15
+u3 = 17 # This one for N = 20
 # u1 = 7
 # u2 = 9
-# u1 = 5
+# u1 = 5 # This one for N = 10
 # u2 = 7
+# u3 = 8 # This one for N = 10
 # u1 = 3
 # u2 = 4
 # u3 = 5
@@ -27,7 +30,7 @@ u2 = 15
 # u = [u1, u2]
 u = {
     1: u1,
-    2: u2
+    3: u3
 }
 
 d0 = {"A":97.22, "B":97.24} # Lap time for driver A/B when using new soft compound tires at the beginning of the race (without pit stops, interactions, or DRS)
@@ -47,8 +50,6 @@ delta = 0.4 # Minimum time difference between drivers at the pit stop exit
 g1 = -0.4
 # g1 = -2.0
 
-DRS_RANGE = 1.0
-
 # gap discretization
 # g_min = -35.0
 # g_max = 35.0
@@ -63,8 +64,8 @@ DRS_RANGE = 1.0
 
 # g_min = -2.5
 # g_max = 2.5
-g_min = -3.0
-g_max = -g_min
+g_max = 5.0
+g_min = -g_max
 # g_step = 0.4
 # g_step = 0.15
 g_step = 0.2
@@ -98,6 +99,13 @@ Z_prob = [1/2, 1/2]
 
 TDRS_vals = [0.3, 0.5]
 TDRS_prob = [0.88, 0.12]
+
+# Z1_vals = [0.2, 0.4]
+# Z2_vals = [0.5, 0.7]
+# Z_prob = [1/2, 1/2]
+
+# TDRS_vals = [0.1, 0.3]
+# TDRS_prob = [0.22, 0.78]
 
 # Z1_vals = [0.4]
 # Z2_vals = [0.7]
@@ -177,14 +185,6 @@ def lap_time_SC(g, driver, pitA, pitB):
             lap_time = d_SC + p_SC["B"] * IB
 
     return lap_time
-
-def g_next_under_SC(g, pitA, pitB):
-    IA = 1 if pitA else 0
-    IB = 1 if pitB else 0
-
-    xi = 1 if (g + p_SC["A"] * IA - p_SC["B"] * IB) < 0 else 0
-
-    return SC_GAP * (-1) ** xi
 
 def lap_time_no_yellow_flag(driver, n, tire_n, w, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS):
     IA = 1 if pitA else 0
@@ -318,9 +318,11 @@ def V_end(tire_A, wA, mA, tire_B, wB, mB, g, objective):
             if Hb:
                 return g
             else:
-                return - math.inf
+                # return - math.inf
+                return g_min
         elif Hb: # and not Ha
-            return math.inf
+            # return math.inf
+            return g_max
         else:
             return 0
     elif objective == "win":
@@ -419,6 +421,37 @@ def solve_SDP(objective="gap"):
             V_prime = {}
             for a in T_allowed:
                 for b in T_allowed:
+                    # This is an intermediate check for H, that checks if tires do not get used longer than their lifespans
+                    if y_VSC + y_SC == 0:
+                        A_infeasible = (a == 0 and wA >= u[tire_A])
+                        B_infeasible = (b == 0 and wB >= u[tire_B])
+
+                        if A_infeasible and B_infeasible:
+                            V_prime[(a, b)] = 0
+                            continue
+
+                        elif A_infeasible:
+                            V_prime[(a, b)] = g_max
+                            continue
+
+                        elif B_infeasible:
+                            V_prime[(a, b)] = g_min
+                            continue
+
+                    # Driver A infeasible
+                    # if a == 0 and y_VSC + y_SC == 0:
+                        # if wA >= u[tire_A]:
+                            # V_prime[(a, b)] = math.inf
+                            # V_prime[(a, b)] = g_max
+                            # continue
+
+                    # Driver B infeasible
+                    # if b == 0 and y_VSC + y_SC == 0:
+                        # if wB >= u[tire_B]:
+                            # V_prime[(a, b)] = -math.inf
+                            # V_prime[(a, b)] = g_min
+                            # continue
+
                     val = 0
 
                     for (z1, z2, t_DRS, p_rv) in RV_combinations:
@@ -473,7 +506,7 @@ def solve_SDP(objective="gap"):
             U[i, j] = V_star[s1] 
 
     # Step 16: solve zero-sum game via LP   
-    # Player B (E.3)
+    # Player B
 
     # Variables: [π_B (nT), ρ]
     c = np.zeros(nT + 1) # Coefficients of the objective function to minimize.
@@ -482,7 +515,6 @@ def solve_SDP(objective="gap"):
     A_ub = [] # Coefficients for the inequality constraints 
     b_ub = [] # Right-hand side values for the inequality constraints.
 
-    # ρ - (U π_B)_i ≤ 0  →  -U[i,:] π_B + ρ ≤ 0
     for i in range(nT):
         A_ub.append([-U[i, j] for j in range(nT)] + [1])
         b_ub.append(0)
@@ -496,7 +528,7 @@ def solve_SDP(objective="gap"):
 
     pi_B = resB.x[:-1]
 
-    # Player A (E.4)
+    # Player A 
     # Variables: [π_A (nT), ρ]
     c = np.zeros(nT + 1)
     c[-1] = 1  # minimize ρ
@@ -504,7 +536,6 @@ def solve_SDP(objective="gap"):
     A_ub = []
     b_ub = []
 
-    # ρ - (U^T π_A)_i ≥ 0  →  (U^T π_A)_i - ρ ≤ 0
     for i in range(nT):
         A_ub.append([U[j, i] for j in range(nT)] + [-1])
         b_ub.append(0)
@@ -519,18 +550,6 @@ def solve_SDP(objective="gap"):
     pi_A = resA.x[:-1]
 
     return U, pi_A, pi_B, xA_star, xB_star
-
-# Run
-# U, pi_A, pi_B = solve_SDP()
-
-# print(f"Payoff matrix U': \n{U}")
-# print(f"π^A (mixed strategy): \n{pi_A}")
-# print(f"π^B (mixed strategy):\n{pi_B}")
-
-# if __name__ == '__main__':
-    # V, xA, xB = solve_algorithm1()
-    # print('Solved Algorithm 1')
-    # print('Number of states:', len(V))
 
 def simulate_race(pi_A, pi_B, xA_star, xB_star, objective="gap"):
     # Initial state
@@ -737,9 +756,11 @@ def plot_sample_path(history, gap_history, yellow_history, pit_history):
     
 def get_sample_no_yellow(pi_A, pi_B, xA_star, xB_star, objective="gap"):
     while True:
-        _, _, h, g, y, p = simulate_race(pi_A, pi_B, xA_star, xB_star, objective)
-        if all(yV == 0 and yS == 0 for (yV, yS) in y):
-            return h, g, y, p
+        g, w, h, gh, yh, ph = simulate_race(pi_A, pi_B, xA_star, xB_star, objective)
+        if all(yV == 0 and yS == 0 for (yV, yS) in yh):
+            print(f"Winner: {w}")
+            print(f"Gap: {g}")
+            return h, gh, yh, ph
 
 # def get_sample_with_VSC(pi_A, pi_B, xA_star, xB_star):
     # while True:
@@ -749,7 +770,9 @@ def get_sample_no_yellow(pi_A, pi_B, xA_star, xB_star, objective="gap"):
         
 def get_sample_with_yellow(pi_A, pi_B, xA_star, xB_star, objective="gap"):
     while True:
-        _, _, h, g, y, p = simulate_race(pi_A, pi_B, xA_star, xB_star, objective)
+        g, w, h, gh, yh, ph = simulate_race(pi_A, pi_B, xA_star, xB_star, objective)
         # Check for any yellow flag (VSC or SC)
-        if any(yV > 0 or yS > 0 for (yV, yS) in y):
-            return h, g, y, p
+        if any(yV > 0 or yS > 0 for (yV, yS) in yh):
+            print(f"Winner: {w}")
+            print(f"Gap: {g}")
+            return h, gh, yh, ph
