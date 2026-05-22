@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.optimize import linprog
 import math
@@ -16,7 +17,7 @@ T0 = [0] + T # 0 = no pit stop
 # u1 = 15
 # u2 = 25
 u1 = 10 # This one for N = 20
-# u2 = 15
+u2 = 15
 u3 = 17 # This one for N = 20
 # u1 = 7
 # u2 = 9
@@ -30,6 +31,7 @@ u3 = 17 # This one for N = 20
 # u = [u1, u2]
 u = {
     1: u1,
+    2: u2,
     3: u3
 }
 
@@ -98,7 +100,7 @@ Z2_vals = [0.7, 0.9]
 Z_prob = [1/2, 1/2]
 
 TDRS_vals = [0.3, 0.5]
-TDRS_prob = [0.88, 0.12]
+TDRS_prob = [0.9, 0.1]
 
 # Z1_vals = [0.2, 0.4]
 # Z2_vals = [0.5, 0.7]
@@ -335,9 +337,11 @@ def V_end(tire_A, wA, mA, tire_B, wB, mB, g, objective):
                 else:
                     return 0
             else: 
-                return - math.inf
+                # return - math.inf
+                return g_min
         elif Hb: # and not Ha
-            return math.inf
+            # return math.inf
+            return g_max
         else:
             return 0
     else:
@@ -421,9 +425,9 @@ def solve_SDP(objective="gap"):
             V_prime = {}
             for a in T_allowed:
                 for b in T_allowed:
-                    # This is an intermediate check for H, that checks if tires do not get used longer than their lifespans
-                    if y_VSC + y_SC == 0:
-                        A_infeasible = (a == 0 and wA >= u[tire_A])
+                    # This is an intermediate check for feasibility, that checks if tires do not get used longer than their lifespans
+                    if y_VSC + y_SC == 0: # Tires do not wear under a yellow flag, so only check under no yellow flag
+                        A_infeasible = (a == 0 and wA >= u[tire_A]) 
                         B_infeasible = (b == 0 and wB >= u[tire_B])
 
                         if A_infeasible and B_infeasible:
@@ -437,20 +441,6 @@ def solve_SDP(objective="gap"):
                         elif B_infeasible:
                             V_prime[(a, b)] = g_min
                             continue
-
-                    # Driver A infeasible
-                    # if a == 0 and y_VSC + y_SC == 0:
-                        # if wA >= u[tire_A]:
-                            # V_prime[(a, b)] = math.inf
-                            # V_prime[(a, b)] = g_max
-                            # continue
-
-                    # Driver B infeasible
-                    # if b == 0 and y_VSC + y_SC == 0:
-                        # if wB >= u[tire_B]:
-                            # V_prime[(a, b)] = -math.inf
-                            # V_prime[(a, b)] = g_min
-                            # continue
 
                     val = 0
 
@@ -624,26 +614,74 @@ def simulate_race(pi_A, pi_B, xA_star, xB_star, objective="gap"):
 
     return g, winner, history, gap_history, yellow_history, pit_history
 
-def run_simulations(U, pi_A, pi_B, xA_star, xB_star, n_sim=10000, objective="gap"):
+def run_simulations(U, pi_A, pi_B, xA_star, xB_star, n_sim=10000, objective="gap", experiment_name=None, tire_set=None, save_csv=False):
+    rows = []
     results = []
 
-    for _ in range(n_sim):
-        g_final, winner, _, _, _, _ = simulate_race(pi_A, pi_B, xA_star, xB_star, objective)
+    for sim_id in range(n_sim):
+
+        g_final, winner, history, gap_history, yellow_history, pit_history = simulate_race(pi_A, pi_B, xA_star, xB_star, objective)
         results.append((g_final, winner))
 
+        # Initial tires
+        start_tire_A = history[0][1]
+        start_tire_B = history[0][2]
+
+        # Number of pit stops
+        n_pits_A = sum(p[0] for p in pit_history)
+        n_pits_B = sum(p[1] for p in pit_history)
+
+        # Yellow flags
+        had_VSC = any(yV > 0 for (yV, yS) in yellow_history)
+        had_SC = any(yS > 0 for (yV, yS) in yellow_history)
+
+        rows.append({
+            "experiment": experiment_name,
+            "objective": objective,
+            "tire_set": str(tire_set),
+
+            "simulation_id": sim_id,
+
+            "final_gap": g_final,
+            "winner": winner,
+
+            "A_wins": int(winner == "A"),
+            "B_wins": int(winner == "B"),
+            "tie": int(winner == "tie"),
+
+            "start_tire_A": start_tire_A,
+            "start_tire_B": start_tire_B,
+
+            "n_pits_A": n_pits_A,
+            "n_pits_B": n_pits_B,
+
+            "had_VSC": int(had_VSC),
+            "had_SC": int(had_SC),
+
+            "mean_gap_race": np.mean(gap_history),
+            "std_gap_race": np.std(gap_history)
+        })
+
+    # Create dataframe
+    df = pd.DataFrame(rows)
+
+    # Save CSV if requested
+    if save_csv and experiment_name is not None:
+        filename = f"{experiment_name}.csv"
+        df.to_csv(filename, index=False)
+        print(f"Saved results to: {filename}")
+
+    # Aggregate statistics
     gaps = np.array([r[0] for r in results])
     winners = [r[1] for r in results]
 
-    # Probabilities
     p_A_win = np.mean([w == "A" for w in winners])
     p_B_win = np.mean([w == "B" for w in winners])
     p_tie = np.mean([w == "tie" for w in winners])
 
-    # Unconditional stats
     mean_gap = np.mean(gaps)
     std_gap = np.std(gaps)
 
-    # Conditional stats
     gaps_A_win = gaps[gaps < 0]
     gaps_B_win = gaps[gaps > 0]
 
@@ -653,7 +691,7 @@ def run_simulations(U, pi_A, pi_B, xA_star, xB_star, n_sim=10000, objective="gap
     std_A_win = np.std(gaps_A_win) if len(gaps_A_win) > 0 else 0
     std_B_win = np.std(gaps_B_win) if len(gaps_B_win) > 0 else 0
 
-    return {
+    summary = {
         "P(A wins)": p_A_win,
         "P(B wins)": p_B_win,
         "P(tie)": p_tie,
@@ -664,6 +702,8 @@ def run_simulations(U, pi_A, pi_B, xA_star, xB_star, n_sim=10000, objective="gap
         "Std gap | A wins": std_A_win,
         "Std gap | B wins": std_B_win,
     }
+
+    return summary, df
 
 def plot_sample_path(history, gap_history, yellow_history, pit_history):
 
@@ -709,8 +749,8 @@ def plot_sample_path(history, gap_history, yellow_history, pit_history):
 
     ax1.set_yticks([0, 1])
     ax1.set_yticklabels(["B", "A"])
-    ax1.set_title("Race strategy")
-    ax1.set_ylabel("Player")
+    ax1.set_title("Race strategy", fontsize=16)
+    ax1.set_ylabel("Player", fontsize=14)
 
     # BOTTOM: gap
     ax2.plot(laps, gap_history, linewidth=2)
@@ -747,9 +787,11 @@ def plot_sample_path(history, gap_history, yellow_history, pit_history):
             current_flag = flag
             
     ax2.axhline(0, linestyle='--', color='black')
-    ax2.set_xlabel("Lap")
-    ax2.set_ylabel("Time Difference [s]")
-    ax2.set_title("Partial Race Time Difference")
+    ax2.set_xlabel("Lap", fontsize=14)
+    ax2.set_ylabel("Time Difference [s]", fontsize=14)
+    ax2.set_title("Partial Race Time Difference (Time Gap)", fontsize=16)
+
+    ax2.set_ylim(g_min - 0.5, g_max + 0.5)
 
     plt.tight_layout()
     plt.show()
@@ -761,12 +803,6 @@ def get_sample_no_yellow(pi_A, pi_B, xA_star, xB_star, objective="gap"):
             print(f"Winner: {w}")
             print(f"Gap: {g}")
             return h, gh, yh, ph
-
-# def get_sample_with_VSC(pi_A, pi_B, xA_star, xB_star):
-    # while True:
-        # _, _, h, g, y, p = simulate_race(pi_A, pi_B, xA_star, xB_star)
-        # if any(yV > 0 for (yV, yS) in y):
-            # return h, g, y, p
         
 def get_sample_with_yellow(pi_A, pi_B, xA_star, xB_star, objective="gap"):
     while True:
@@ -776,3 +812,68 @@ def get_sample_with_yellow(pi_A, pi_B, xA_star, xB_star, objective="gap"):
             print(f"Winner: {w}")
             print(f"Gap: {g}")
             return h, gh, yh, ph
+        
+
+def run_simulations_save_csv(experiment_name, objective, tire_set, U, pi_A, pi_B, xA_star, xB_star, n_sim=10000):
+
+    rows = []
+
+    for sim_id in range(n_sim):
+
+        g_final, winner, history, gap_history, yellow_history, pit_history = simulate_race(
+            pi_A,
+            pi_B,
+            xA_star,
+            xB_star,
+            objective
+        )
+
+        # Initial tires
+        start_tire_A = history[0][1]
+        start_tire_B = history[0][2]
+
+        # Number of pit stops
+        n_pits_A = sum(p[0] for p in pit_history)
+        n_pits_B = sum(p[1] for p in pit_history)
+
+        # Yellow flags
+        had_VSC = any(yV > 0 for (yV, yS) in yellow_history)
+        had_SC = any(yS > 0 for (yV, yS) in yellow_history)
+
+        rows.append({
+
+            "experiment": experiment_name,
+            "objective": objective,
+            "tire_set": str(tire_set),
+
+            "simulation_id": sim_id,
+
+            "final_gap": g_final,
+            "winner": winner,
+
+            "A_wins": int(winner == "A"),
+            "B_wins": int(winner == "B"),
+            "tie": int(winner == "tie"),
+
+            "start_tire_A": start_tire_A,
+            "start_tire_B": start_tire_B,
+
+            "n_pits_A": n_pits_A,
+            "n_pits_B": n_pits_B,
+
+            "had_VSC": int(had_VSC),
+            "had_SC": int(had_SC),
+
+            "mean_gap_race": np.mean(gap_history),
+            "std_gap_race": np.std(gap_history)
+        })
+
+    df = pd.DataFrame(rows)
+
+    filename = f"{experiment_name}.csv"
+
+    df.to_csv(filename, index=False)
+
+    print(f"Saved results to: {filename}")
+
+    return df
