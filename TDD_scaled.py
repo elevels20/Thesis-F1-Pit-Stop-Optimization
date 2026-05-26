@@ -13,15 +13,9 @@ T = [1, 2]
 T_cartesian = list(itertools.product(T, T))
 T0 = [0] + T # 0 = no pit stop
 
-# u1 = 30 # Lifespan in number of laps for Soft tires
-# u2 = 40 # Lifespan in number of laps for Medium tires
-# u3 = 50 # Lifespan in number of laps for Hard tires
-u1 = 5 
-u2 = 7 
-u3 = 8 
-# u1 = 3
-# u2 = 4
-# u3 = 5
+u1 = 5 # Lifespan in number of laps for Soft tires
+u2 = 7 # Lifespan in number of laps for Medium tires
+u3 = 8 # Lifespan in number of laps for Hard tires
 u = {
     1: u1,
     2: u2,
@@ -29,13 +23,12 @@ u = {
 }
 
 d0 = {"A":97.22, "B":97.24, "C": 97.20} # Lap time for driver A/B/C when using new soft compound tires at the beginning of the race (without pit stops, interactions, or DRS)
-# d0 = {"A":96.0, "B":98.0, "C": 97.0} # Lap time for driver A/B/C when using new soft compound tires at the beginning of the race (without pit stops, interactions, or DRS)
+# d0 = {"A":96.0, "B":98.0, "C": 97.0} # Use these for experiments where A has a performance advantage
 p0 = {"A":20.2, "B":20.0, "C": 20.4} # Additional lap time for driver A/B/C due to a pit stop
 
 lambda_pen = 2.0
 h = 0.02 # Lap time reduction between two consecutive laps attributed to fuel consumption (making the car lighter)
 
-# DRS_RANGE = 0.4
 DRS_RANGE = 1.0
 
 delta = 0.4
@@ -49,42 +42,22 @@ g_min = -g_max
 g_step = 0.4  
 g_values = np.arange(g_min, g_max + g_step, g_step)
 
-# Scaling
-# SCALE = 2 / 35
-
-# p0 = {k: v * SCALE for k, v in p0.items()}
-# p_SC = {k: v * SCALE for k, v in p_SC.items()}
-# p_VSC = {k: v * SCALE for k, v in p_VSC.items()}
-# h *= SCALE
-# lambda_pen = 2.0 / SCALE
-
-# Fix baseline lap times
-# d0 = {k: v * SCALE for k, v in d0.items()}
-
 z1 = 0.4
 z2 = 0.7
 
-# t_drs = 0.3
 t_drs = 0.5
 
 SCALE = 0.2
 
 p0 = {k: v * SCALE for k, v in p0.items()}
-# delta *= SCALE
 delta = g_step
 h *= SCALE
-# lambda_pen = 2.0 / SCALE
 d0 = {k: v * SCALE for k, v in d0.items()}
-# d_VSC *= SCALE
-# d_SC  *= SCALE
-# SC_GAP = 0.5 * SCALE
-# DRS_RANGE *= SCALE
 DRS_RANGE = 0.5
-# t_drs *= SCALE
 g_AB1 = -g_step
 g_AC1 = - 2 * g_step
-# g_AB1 = - 2 * g_step
-# g_AC1 = - 4 * g_step
+# g_AB1 = - 2 * g_step # Use these for experiments where A has a performance advantage
+# g_AC1 = - 4 * g_step # Use these for experiments where A has a performance advantage
 
 # state = (tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC)
 
@@ -266,8 +239,6 @@ def V_end(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC):
     else:
         return g_max
 
-# state = (tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC)
-
 def generate_states(n):
     states = []
 
@@ -309,12 +280,11 @@ def generate_states(n):
 
 # Dynamic Programming Algorithm
 def solve_DP():
-    # Step 3: Compute 𝑉 ′^{*} _N+1(s_n) for all s_n ∈ S_N+1
+    # Step 1: Initialize V^{*}_N+1(s)
     states_final = generate_states(N + 1) 
     V_star = {state: 0 for state in states_final}
     for state in states_final:
         tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC = state
-        # V[state] = V_end(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC)
         V_star[state] = V_end(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC)
 
     # Policies
@@ -334,11 +304,11 @@ def solve_DP():
         for state in states:
             tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC = state
 
-            # Step 6: compute V'_n(s,a,(b,c)) for all a ∈ T_allowed, (b, c) ∈ T_allowed^2
+            # Step 6: compute V_n(s,a,(b,c)) for all a ∈ T_allowed, (b, c) ∈ T_allowed^2
             V_prime = {}
             for a in T_allowed:
                 for b,c in T_allowed_cartesian:
-                    # Feasibility checks
+                    # Step 6: Feasibility checks
                     # This is an intermediate check for feasibility, that checks if tires do not get used longer than their lifespans
                     A_infeas = (a == 0 and wA >= u[tire_A])
                     B_infeas = (b == 0 and wB >= u[tire_B])
@@ -370,26 +340,26 @@ def solve_DP():
                     V_prime[(a, (b, c))] = val
 
             if g_AB < 0 and g_AC < 0: # A is leader (minimize g)
-                # Step 8: compute (x_n^{B*}, x_n^{C*})(s,a) for all a ∈ T_allowed.
+                # Step 12: compute (x_n^{B*}, x_n^{C*})(s,a) for all a ∈ T_allowed.
                 bc_star = {a: max(T_allowed_cartesian, key=lambda bc: V_prime[(a, bc)]) for a in T_allowed}
 
-                # Step 9: compute x_n^{A*}(s)
+                # Step 13: compute x_n^{A*}(s)
                 a_star = min(T_allowed, key=lambda a: V_prime[(a, bc_star[a])])
 
-                # Step 10: value update
+                # Step 14: value update
                 V_star_new[state] = V_prime[(a_star, bc_star[a_star])]
 
                 xA_star[(n, state)] = a_star
                 xBC_star[(n, state)] = bc_star[a_star]
             
             else: # A is follower 
-                # Step 12: compute x_n^{A*}(s,(b, c)) for all b, c ∈ T_allowed.
+                # Step 16: compute x_n^{A*}(s,(b, c)) for all b, c ∈ T_allowed.
                 a_star = {bc: min(T_allowed, key=lambda a: V_prime[(a, bc)]) for bc in T_allowed_cartesian}
 
-                # Step 13: compute (x_n^{B*}, x_n^{C*})(s)
+                # Step 17: compute (x_n^{B*}, x_n^{C*})(s)
                 bc_star = max(T_allowed_cartesian, key=lambda bc: V_prime[(a_star[bc], bc)])
 
-                # Step 14: value update
+                # Step 18: value update
                 V_star_new[state] = V_prime[(a_star[bc_star], bc_star)]
 
                 xA_star[(n, state)] = a_star[bc_star]
@@ -401,7 +371,7 @@ def solve_DP():
     nT = len(T)
     nT_cartesian = len(T_cartesian)
 
-    # Step 15: build payoff matrix U'
+    # Step 12: build payoff matrix U'
     U = np.zeros((nT, nT_cartesian))
 
     g_AB_init = discretize_gap(g_AB1)
@@ -412,7 +382,7 @@ def solve_DP():
             s1 = (tA, 0, 0, tB, 0, 0, tC, 0, 0, g_AB_init, g_AC_init)
             U[i, j] = V_star[s1]
 
-    # Step 16: solve zero-sum game via LP   
+    # Step 14: solve zero-sum game via LP   
     # Players (B, C) 
 
     # Variables: [π_BC (nT_cartesian), ρ]
@@ -480,7 +450,7 @@ def simulate_race(pi_A, pi_BC, xA_star, xBC_star):
 
         tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC = state
 
-        # Optimal decisions from SDP
+        # Optimal decisions from DP
         a = xA_star[(n, state)]
         b, c = xBC_star[(n, state)]
 
@@ -561,12 +531,6 @@ def run_simulations(U, pi_A, pi_BC, xA_star, xBC_star, n_sim=10000):
     mean_AB_A_win = np.mean(gaps_AB_A_win) if gaps_AB_A_win else 0
     mean_AC_A_win = np.mean(gaps_AC_A_win) if gaps_AC_A_win else 0
 
-    mean_AB_B_win = np.mean(gaps_AB_B_win) if gaps_AB_B_win else 0
-    mean_AC_B_win = np.mean(gaps_AC_B_win) if gaps_AC_B_win else 0
-
-    mean_AB_C_win = np.mean(gaps_AB_C_win) if gaps_AB_C_win else 0
-    mean_AC_C_win = np.mean(gaps_AC_C_win) if gaps_AC_C_win else 0
-
     mean_AB_BC_win = np.mean(gaps_AB_BC_win) if gaps_AB_BC_win else 0
     mean_AC_BC_win = np.mean(gaps_AC_BC_win) if gaps_AC_BC_win else 0
 
@@ -574,19 +538,11 @@ def run_simulations(U, pi_A, pi_BC, xA_star, xBC_star, n_sim=10000):
     std_AB_A_win = np.std(gaps_AB_A_win) if gaps_AB_A_win else 0
     std_AC_A_win = np.std(gaps_AC_A_win) if gaps_AC_A_win else 0
 
-    std_AB_B_win = np.std(gaps_AB_B_win) if gaps_AB_B_win else 0
-    std_AC_B_win = np.std(gaps_AC_B_win) if gaps_AC_B_win else 0
-
-    std_AB_C_win = np.std(gaps_AB_C_win) if gaps_AB_C_win else 0
-    std_AC_C_win = np.std(gaps_AC_C_win) if gaps_AC_C_win else 0
-
     std_AB_BC_win = np.std(gaps_AB_BC_win) if gaps_AB_BC_win else 0
     std_AC_BC_win = np.std(gaps_AC_BC_win) if gaps_AC_BC_win else 0
 
     return {
         "P(A wins)": p_A_win,
-        # "P(B wins)": p_B_win,
-        # "P(C wins)": p_C_win,
         "P(BC wins)": p_BC_win,
         "Mean gap g_AB": mean_g_AB,
         "Mean gap g_AC": mean_g_AC,
@@ -610,10 +566,7 @@ def plot_sample_path(history, gap_history, pit_history):
 
     # TOP: pit strategy
     # horizontal dashed lines
-    # ax1.hlines(1, 1, N, linestyles='dashed')
-    # ax1.hlines(0, 1, N, linestyles='dashed')
     ax1.hlines([2,1,0], 1, N + 1, linestyles='dashed', color='black')  # horizontal guides for C, A, B
-
 
     # color mapping
     tire_colors = {
