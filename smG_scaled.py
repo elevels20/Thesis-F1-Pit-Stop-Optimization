@@ -2,13 +2,14 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.optimize import linprog
+from scipy.stats import ttest_ind
 import math
 
 # PARAMETERS
 N = 20 # Number of laps 
 # T = [1, 2, 3] # Tire compounds. 1 = Soft, 2 = Medium, 3 = Hard
-# T = [1, 2]
-T = [1, 3]
+T = [1, 2]
+# T = [1, 3]
 T0 = [0] + T # 0 = no pit stop
 
 # u1 = 30 # Lifespan in number of laps for Soft tires
@@ -246,17 +247,11 @@ def m_next(m, decision, tire):
 def g_next(y_VSC, y_SC, n, tire_A_n, tire_B_n, wA, wB, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS):
     return g + final_lap_time(y_VSC, y_SC, "A", n, tire_A_n, wA, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS) - final_lap_time(y_VSC, y_SC, "B", n, tire_B_n, wB, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS)
     
-# def discretize_gap(g):
-    # return min(g_values, key=lambda x: abs(x - g))
 
 def discretize_gap(g):
     idx = int(round((g - g_min) / g_step))
-    # idx = int((g - g_min) / g_step + 0.5)
     idx = max(0, min(idx, len(g_values)-1))
     return g_values[idx]
-
-# def discretize_gap(g):
-    # return g_values[np.argmin(np.abs(g_values - g))]
 
 def y_VSC_next(Y_VSC):
     return Y_VSC
@@ -682,8 +677,8 @@ def run_simulations(U, pi_A, pi_B, xA_star, xB_star, n_sim=10000, objective="gap
     mean_gap = np.mean(gaps)
     std_gap = np.std(gaps)
 
-    gaps_A_win = gaps[gaps < 0]
-    gaps_B_win = gaps[gaps > 0]
+    gaps_A_win = gaps[np.array(winners) == "A"]
+    gaps_B_win = gaps[np.array(winners) == "B"]
 
     mean_A_win = np.mean(gaps_A_win) if len(gaps_A_win) > 0 else 0
     mean_B_win = np.mean(gaps_B_win) if len(gaps_B_win) > 0 else 0
@@ -720,7 +715,7 @@ def plot_sample_path(history, gap_history, yellow_history, pit_history):
     tire_colors = {
         1: "red",      # Soft
         2: "orange",   # Medium
-        3: "black"     # Hard (if used)
+        3: "black"     # Hard 
     }
 
     for i, lap in enumerate(laps):
@@ -877,3 +872,15 @@ def run_simulations_save_csv(experiment_name, objective, tire_set, U, pi_A, pi_B
     print(f"Saved results to: {filename}")
 
     return df
+
+    def compare_gap(df_gap, df_win):
+
+    tstat, pval = ttest_ind(
+        df_gap["final_gap"],
+        df_win["final_gap"],
+        equal_var=False
+    )
+
+    print("Gap comparison")
+    print("t =", tstat)
+    print("p =", pval)
