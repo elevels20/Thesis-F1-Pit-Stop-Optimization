@@ -16,23 +16,20 @@ T0 = [0] + T # 0 = no pit stop
 # u1 = 30 # Lifespan in number of laps for Soft tires
 # u2 = 40 # Lifespan in number of laps for Medium tires
 # u3 = 50 # Lifespan in number of laps for Hard tires
-u1 = 5
-u2 = 7
-u3 = 8
+u1 = 5 
+u2 = 7 
+u3 = 8 
 # u1 = 3
 # u2 = 4
 # u3 = 5
 u = {
     1: u1,
-    2: u2
+    2: u2,
+    3: u3
 }
-# u = {
-    # 1: u1,
-    # 2: u2,
-    # 3: u3
-# }
 
 d0 = {"A":97.22, "B":97.24, "C": 97.20} # Lap time for driver A/B/C when using new soft compound tires at the beginning of the race (without pit stops, interactions, or DRS)
+# d0 = {"A":96.0, "B":98.0, "C": 97.0} # Lap time for driver A/B/C when using new soft compound tires at the beginning of the race (without pit stops, interactions, or DRS)
 p0 = {"A":20.2, "B":20.0, "C": 20.4} # Additional lap time for driver A/B/C due to a pit stop
 
 lambda_pen = 2.0
@@ -47,7 +44,7 @@ g_AB1 = -0.4 # Initial time gap between A and B
 g_AC1 = -0.8 # Initial time gap between A and C
 
 # gap discretization
-g_max = 2.0
+g_max = 3.5
 g_min = -g_max
 g_step = 0.4  
 g_values = np.arange(g_min, g_max + g_step, g_step)
@@ -86,6 +83,8 @@ DRS_RANGE = 0.5
 # t_drs *= SCALE
 g_AB1 = -g_step
 g_AC1 = - 2 * g_step
+# g_AB1 = - 2 * g_step
+# g_AC1 = - 4 * g_step
 
 # state = (tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC)
 
@@ -203,18 +202,11 @@ def g_AC_next(n, tire_A_n, tire_C_n, wA, wC, pitA, pitB, pitC, g_AB, g_AC, g_BC)
     
 def g_BC_next(g_AB_n, g_AC_n):
     return g_AC_n - g_AB_n
-    
-# def discretize_gap(g):
-    # return min(g_values, key=lambda x: abs(x - g))
 
 def discretize_gap(g):
     idx = int(round((g - g_min) / g_step))
-    # idx = int((g - g_min) / g_step + 0.5)
     idx = max(0, min(idx, len(g_values)-1))
     return g_values[idx]
-
-# def discretize_gap(g):
-    # return g_values[np.argmin(np.abs(g_values - g))]
     
 def state_next(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC, n, decisionA, decisionB, decisionC):
     tire_A_n = t_next(tire_A, decisionA)
@@ -237,11 +229,11 @@ def state_next(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC, n, de
 
     g_AB_n = g_AB_next(n, tire_A_n, tire_B_n, wA, wB, pitA, pitB, pitC, g_AB, g_AC, g_BC)
     g_AC_n = g_AC_next(n, tire_A_n, tire_C_n, wA, wC, pitA, pitB, pitC, g_AB, g_AC, g_BC)
-    g_BC_n = g_BC_next(g_AB_n, g_AC_n)
+    # g_BC_n = g_BC_next(g_AB_n, g_AC_n)
     
     g_AB_n = discretize_gap(g_AB_n)
     g_AC_n = discretize_gap(g_AC_n)
-    g_BC_n = discretize_gap(g_BC_n)
+    # g_BC_n = discretize_gap(g_BC_n)
 
     return (tire_A_n, wA_n, mA_n, tire_B_n, wB_n, mB_n, tire_C_n, wC_n, mC_n, g_AB_n, g_AC_n)
 
@@ -253,43 +245,26 @@ def H(w, u, m):
     """
     return w <= u and m == 1
 
-def V_end(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC, objective):
+def V_end(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC):
     Ha = H(wA, u[tire_A], mA)
     Hb = H(wB, u[tire_B], mB)
     Hc = H(wC, u[tire_C], mC)
 
-    if objective == "all":
-        if Ha:
-            if Hb and Hc:
+    if Ha:
+        if Hb:
+            if Hc:
                 return max(g_AB, g_AC)
             else:
-                # return - math.inf
-                return g_min
-        elif (not Ha) and (not Hb) and (not Hc):
-            return 0
+                return g_AB
         else:
-            # return math.inf
-            return g_max
-    elif objective == "simple":
-        if Ha:
-            if Hb:
-                if Hc:
-                    return max(g_AB, g_AC)
-                else:
-                    return g_AB
+            if Hc:
+                return g_AC
             else:
-                if Hc:
-                    return g_AC
-                else:
-                    # return - math.inf
-                    return g_min
-        elif (not Ha) and (not Hb) and (not Hc):
-            return 0
-        else:
-            # return math.inf
-            return g_max
+                return g_min
+    elif (not Ha) and (not Hb) and (not Hc):
+        return 0
     else:
-        raise ValueError("Unknown objective: choose 'all' or 'simple'")
+        return g_max
 
 # state = (tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC)
 
@@ -333,14 +308,14 @@ def generate_states(n):
     return states
 
 # Dynamic Programming Algorithm
-def solve_DP(objective="all"):
+def solve_DP():
     # Step 3: Compute 𝑉 ′^{*} _N+1(s_n) for all s_n ∈ S_N+1
     states_final = generate_states(N + 1) 
     V_star = {state: 0 for state in states_final}
     for state in states_final:
         tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC = state
         # V[state] = V_end(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC)
-        V_star[state] = V_end(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC, objective)
+        V_star[state] = V_end(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC)
 
     # Policies
     xA_star = {}
@@ -364,53 +339,28 @@ def solve_DP(objective="all"):
             for a in T_allowed:
                 for b,c in T_allowed_cartesian:
                     # Feasibility checks
-                    # This is an intermediate check for H, that checks if tires do not get used longer than their lifespans
+                    # This is an intermediate check for feasibility, that checks if tires do not get used longer than their lifespans
                     A_infeas = (a == 0 and wA >= u[tire_A])
                     B_infeas = (b == 0 and wB >= u[tire_B])
                     C_infeas = (c == 0 and wC >= u[tire_C])
 
-                    if objective == "all":
-                        # A feasible iff A feasible
-                        # BC feasible iff BOTH B and C feasible
-
-                        if A_infeas:
-                            if B_infeas and C_infeas:
-                                # everyone infeasible
-                                V_prime[(a, (b, c))] = 0
-                                continue
-                            else:
-                                # only A infeasible
-                                # BC wins
-                                V_prime[(a, (b, c))] = g_max
-                                continue
+                    # BC feasible iff at least one of B or C feasible
+                    BC_infeas = B_infeas and C_infeas
+                    if A_infeas:
+                        if BC_infeas:
+                            # everyone infeasible
+                            V_prime[(a, (b, c))] = 0
+                            continue
                         else:
-                            # A feasible
-                            if B_infeas or C_infeas:
-                                # BC infeasible
-                                # A wins
-                                V_prime[(a, (b, c))] = g_min
-                                continue
-
-                    elif objective == "simple":
-                        # BC feasible iff at least one of B or C feasible
-                        BC_infeas = B_infeas and C_infeas
-                        if A_infeas:
-                            if BC_infeas:
-                                # everyone infeasible
-                                V_prime[(a, (b, c))] = 0
-                                continue
-                            else:
-                                # only A infeasible
-                                V_prime[(a, (b, c))] = g_max
-                                continue
-                        else:
-                            # A feasible
-                            if BC_infeas:
-                                # both B and C infeasible
-                                V_prime[(a, (b, c))] = g_min
-                                continue
+                            # only A infeasible (plus maybe B OR C)
+                            V_prime[(a, (b, c))] = g_max
+                            continue
                     else:
-                        raise ValueError("Unknown objective")
+                        # A feasible
+                        if BC_infeas:
+                            # both B and C infeasible
+                            V_prime[(a, (b, c))] = g_min
+                            continue
 
                     val = 0
                     state_n = state_next(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC, n, a, b, c)
@@ -509,7 +459,7 @@ def solve_DP(objective="all"):
     return U, pi_A, pi_BC, xA_star, xBC_star
 
 
-def simulate_race(pi_A, pi_BC, xA_star, xBC_star, objective="all"):
+def simulate_race(pi_A, pi_BC, xA_star, xBC_star):
     # Initial state
     tA = np.random.choice(T, p=pi_A)
 
@@ -557,7 +507,7 @@ def simulate_race(pi_A, pi_BC, xA_star, xBC_star, objective="all"):
     gap_history.append((g_AB, g_AC))
     pit_history.append((False, False, False, 0, 0, 0))
 
-    val = V_end(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC, objective)
+    val = V_end(tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC)
 
     if val > 0:
         winner = "BC"
@@ -568,11 +518,11 @@ def simulate_race(pi_A, pi_BC, xA_star, xBC_star, objective="all"):
  
     return (g_AB, g_AC), winner, history, gap_history, pit_history
 
-def run_simulations(U, pi_A, pi_BC, xA_star, xBC_star, n_sim=10000, objective="all"):
+def run_simulations(U, pi_A, pi_BC, xA_star, xBC_star, n_sim=10000):
     results = []
 
     for _ in range(n_sim):
-        g_final, winner, _, _, _ = simulate_race(pi_A, pi_BC, xA_star, xBC_star, objective)
+        g_final, winner, _, _, _ = simulate_race(pi_A, pi_BC, xA_star, xBC_star)
         results.append((g_final, winner))
 
     g_AB = np.array([r[0][0] for r in results])
@@ -711,8 +661,8 @@ def plot_sample_path(history, gap_history, pit_history):
 
     ax1.set_yticks([0, 1, 2])
     ax1.set_yticklabels(["C", "B", "A"])
-    ax1.set_title("Race strategy")
-    ax1.set_ylabel("Player")
+    ax1.set_title("Race strategy", fontsize=16)
+    ax1.set_ylabel("Player", fontsize=14)
 
     # BOTTOM: gaps
     g_AB = [g[0] for g in gap_history]
@@ -722,10 +672,15 @@ def plot_sample_path(history, gap_history, pit_history):
     ax2.plot(laps, g_AC, label="g_AC", linewidth=2)
             
     ax2.axhline(0, linestyle='--', color='black')
-    ax2.set_xlabel("Lap")
-    ax2.set_ylabel("Time Difference [s]")
+    ax2.set_xlabel("Lap", fontsize=14)
+    ax2.set_ylabel("Time Difference [s]", fontsize=14)
     ax2.legend()
-    ax2.set_title("Time gaps relative to A")
+    ax2.set_title("Time gaps relative to A", fontsize=16)
 
+    ax2.set_ylim(g_min - 0.5, g_max + 0.5)
+
+    ax1.tick_params(axis='both', labelsize=12)
+    ax2.tick_params(axis='both', labelsize=12)
+    
     plt.tight_layout()
     plt.show()
