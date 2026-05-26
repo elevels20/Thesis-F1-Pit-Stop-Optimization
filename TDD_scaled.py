@@ -1,4 +1,3 @@
-# with appendix G
 import numpy as np
 import matplotlib.pyplot as plt
 import itertools
