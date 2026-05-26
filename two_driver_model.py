@@ -188,12 +188,6 @@ def discretize_gap(g):
     idx = max(0, min(idx, len(g_values)-1))
     return g_values[idx]
 
-def y_VSC_next(Y_VSC):
-    return Y_VSC
-
-def y_SC_next(Y_SC):
-    return Y_SC
-
 def y_DRS_next(y_DRS, Y_VSC, Y_SC):
     I_Y = 1 if Y_VSC + Y_SC == 0 else 0
     I_Y_VSC = 1 if Y_VSC > 0 else 0
