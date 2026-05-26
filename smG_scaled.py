@@ -347,7 +347,7 @@ def solve_SDP(objective="gap"):
         for state in states:
             tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_DRS = state
 
-            # Step 8: compute V_n(s,a,b) for all a, b ∈ T_allowed.
+            # Step 8: compute V_n(s,a,b) (=V_prime) for all a, b ∈ T_allowed.
             V_prime = {}
             for a in T_allowed:
                 for b in T_allowed:

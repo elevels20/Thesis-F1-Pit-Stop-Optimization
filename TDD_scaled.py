@@ -303,7 +303,7 @@ def solve_DP():
         for state in states:
             tire_A, wA, mA, tire_B, wB, mB, tire_C, wC, mC, g_AB, g_AC = state
 
-            # Step 6: compute V_n(s,a,(b,c)) for all a ∈ T_allowed, (b, c) ∈ T_allowed^2
+            # Step 6: compute V_n(s,a,(b,c)) (=V_prime) for all a ∈ T_allowed, (b, c) ∈ T_allowed^2
             V_prime = {}
             for a in T_allowed:
                 for b,c in T_allowed_cartesian:
