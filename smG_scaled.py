@@ -12,24 +12,9 @@ T = [1, 2]
 # T = [1, 3]
 T0 = [0] + T # 0 = no pit stop
 
-# u1 = 30 # Lifespan in number of laps for Soft tires
-# u2 = 40 # Lifespan in number of laps for Medium tires
-# u3 = 50 # Lifespan in number of laps for Hard tires
-# u1 = 15
-# u2 = 25
-u1 = 10 # This one for N = 20
-u2 = 15
-u3 = 17 # This one for N = 20
-# u1 = 7
-# u2 = 9
-# u1 = 5 # This one for N = 10
-# u2 = 7
-# u3 = 8 # This one for N = 10
-# u1 = 3
-# u2 = 4
-# u3 = 5
-# u = [u1, u2, u3]
-# u = [u1, u2]
+u1 = 10 # Lifespan in number of laps for Soft tires
+u2 = 15 # Lifespan in number of laps for Medium tires
+u3 = 17 # Lifespan in number of laps for Hard tires
 u = {
     1: u1,
     2: u2,
@@ -51,26 +36,10 @@ p_SC  = {"A":10.0, "B":10.0} #additional lap time for driver A/B due to a pit st
 delta = 0.4 # Minimum time difference between drivers at the pit stop exit 
 
 g1 = -0.4
-# g1 = -2.0
 
 # gap discretization
-# g_min = -35.0
-# g_max = 35.0
-# g_step = 0.04
-# g_values = np.arange(g_min, g_max + g_step, g_step)
-
-# g_min = -2
-# g_max = 2
-# g_step = 0.4        
-# g_step = 0.2        
-# g_values = np.arange(g_min, g_max + g_step, g_step)
-
-# g_min = -2.5
-# g_max = 2.5
 g_max = 5.0
 g_min = -g_max
-# g_step = 0.4
-# g_step = 0.15
 g_step = 0.2
 g_values = np.arange(g_min, g_max + g_step, g_step)
 
@@ -89,13 +58,6 @@ k_VSC = 2 # Number of laps needed to be raced after the end of a VSC to enable t
 k_SC = 2 # Number of laps needed to be raced after the end of a SC to enable the DRS
 
 # RANDOM VARIABLES
-# Z1_vals = [0.2, 0.4, 0.6] 
-# Z2_vals = [0.5, 0.7, 0.9]
-# Z_prob = [1/3, 1/3, 1/3]
-
-# TDRS_vals = [0.1, 0.3, 0.5]
-# TDRS_prob = [0.2, 0.7, 0.1]
-
 Z1_vals = [0.4, 0.6]
 Z2_vals = [0.7, 0.9]
 Z_prob = [1/2, 1/2]
@@ -103,50 +65,24 @@ Z_prob = [1/2, 1/2]
 TDRS_vals = [0.3, 0.5]
 TDRS_prob = [0.9, 0.1]
 
-# Z1_vals = [0.2, 0.4]
-# Z2_vals = [0.5, 0.7]
-# Z_prob = [1/2, 1/2]
-
-# TDRS_vals = [0.1, 0.3]
-# TDRS_prob = [0.22, 0.78]
-
-# Z1_vals = [0.4]
-# Z2_vals = [0.7]
-# Z_prob = [1.0]
-
-# TDRS_vals = [0.3]
-# TDRS_prob = [1.0]
-
 # Scaling
-# SCALE = 2 / 35
 SCALE = 0.2
-# SCALE = 0.1
 
 p0 = {k: v * SCALE for k, v in p0.items()}
 p_SC = {k: v * SCALE for k, v in p_SC.items()}
 p_VSC = {k: v * SCALE for k, v in p_VSC.items()}
-# delta *= SCALE
 delta = g_step
 h *= SCALE
-# lambda_pen = 2.0 / SCALE
-# lambda_pen = 2.0 / 0.5
 d0 = {k: v * SCALE for k, v in d0.items()}
 d_VSC *= SCALE
 d_SC  *= SCALE
-# SC_GAP = 0.5 * SCALE
 SC_GAP = g_step
-# DRS_RANGE *= SCALE
-# DRS_RANGE = 0.5
 DRS_RANGE = 0.5
-# TDRS_vals = [x * SCALE for x in TDRS_vals]
-# TDRS_vals = [x * 0.5 for x in TDRS_vals]
-# g1 *= SCALE
 g1 = -g_step
 
 # state = (tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_DRS)
 
 # FUNCTIONS
-
 # Tire-wear function
 def tire_wear(tire, w):
     if tire == 1:
@@ -180,10 +116,10 @@ def lap_time_SC(g, driver, pitA, pitB):
         if xi == 1: # Driver A ends up ahead of B after the pit stop exit of a particular lap
             lap_time = d_SC + p_SC["A"] * IA
         else:
-            lap_time = d_SC + p_SC["A"] * IA - g + SC_GAP # lap_time = d_SC + p_SC["B"] * IA - g + 0.5
+            lap_time = d_SC + p_SC["A"] * IA - g + SC_GAP 
     else:
         if xi == 1:
-            lap_time = d_SC + p_SC["B"] * IB + g + SC_GAP # lap_time = d_SC + p_SC["A"] * IB + g + 0.5
+            lap_time = d_SC + p_SC["B"] * IB + g + SC_GAP 
         else:
             lap_time = d_SC + p_SC["B"] * IB
 
@@ -247,7 +183,6 @@ def m_next(m, decision, tire):
 def g_next(y_VSC, y_SC, n, tire_A_n, tire_B_n, wA, wB, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS):
     return g + final_lap_time(y_VSC, y_SC, "A", n, tire_A_n, wA, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS) - final_lap_time(y_VSC, y_SC, "B", n, tire_B_n, wB, pitA, pitB, g, y_DRS, Z1, Z2, T_DRS)
     
-
 def discretize_gap(g):
     idx = int(round((g - g_min) / g_step))
     idx = max(0, min(idx, len(g_values)-1))
@@ -315,10 +250,8 @@ def V_end(tire_A, wA, mA, tire_B, wB, mB, g, objective):
             if Hb:
                 return g
             else:
-                # return - math.inf
                 return g_min
         elif Hb: # and not Ha
-            # return math.inf
             return g_max
         else:
             return 0
@@ -332,10 +265,8 @@ def V_end(tire_A, wA, mA, tire_B, wB, mB, g, objective):
                 else:
                     return 0
             else: 
-                # return - math.inf
                 return g_min
         elif Hb: # and not Ha
-            # return math.inf
             return g_max
         else:
             return 0
@@ -386,7 +317,7 @@ def generate_states(n):
 
 # Stochastic Dynamic Programming Algorithm
 def solve_SDP(objective="gap"):
-    # Step 3: Compute 𝑉 ′^{*} _N+1(s_n) for all s_n ∈ S_N+1
+    # Step 1: Initialize V^{*}_{N+1}(s)
     states_final = generate_states(N + 1) 
     V_star = {state: 0 for state in states_final}
     for state in states_final:
@@ -416,11 +347,11 @@ def solve_SDP(objective="gap"):
         for state in states:
             tire_A, wA, mA, tire_B, wB, mB, g, y_VSC, y_SC, y_DRS = state
 
-            # Step 6: compute V'_n(s,a,b) for all a, b ∈ T_allowed.
+            # Step 8: compute V_n(s,a,b) for all a, b ∈ T_allowed.
             V_prime = {}
             for a in T_allowed:
                 for b in T_allowed:
-                    # This is an intermediate check for feasibility, that checks if tires do not get used longer than their lifespans
+                    # Step 6: This is an intermediate check for feasibility, that checks if tires do not get used longer than their lifespans
                     if y_VSC + y_SC == 0: # Tires do not wear under a yellow flag, so only check under no yellow flag
                         A_infeasible = (a == 0 and wA >= u[tire_A]) 
                         B_infeasible = (b == 0 and wB >= u[tire_B])
@@ -449,26 +380,26 @@ def solve_SDP(objective="gap"):
                     V_prime[(a, b)] = val
 
             if g < 0: # A is leader (minimize g)
-                # Step 8: compute x_n^{B*}(s,a) for all a ∈ T_allowed.
+                # Step 12: compute x_n^{B*}(s,a) for all a ∈ T_allowed.
                 b_star = {a: max(T_allowed, key=lambda b: V_prime[(a, b)]) for a in T_allowed}
 
-                # Step 9: compute x_n^{A*}(s)
+                # Step 13: compute x_n^{A*}(s)
                 a_star = min(T_allowed, key=lambda a: V_prime[(a, b_star[a])])
 
-                # Step 10: value update
+                # Step 14: value update
                 V_star_new[state] = V_prime[(a_star, b_star[a_star])]
 
                 xA_star[(n, state)] = a_star
                 xB_star[(n, state)] = b_star[a_star]
             
             else: # B is leader (maximize g)
-                # Step 12: compute x_n^{A*}(s,b) for all b ∈ T_allowed.
+                # Step 16: compute x_n^{A*}(s,b) for all b ∈ T_allowed.
                 a_star = {b: min(T_allowed, key=lambda a: V_prime[(a, b)]) for b in T_allowed}
 
-                # Step 13: compute x_n^{B*}(s)
+                # Step 17: compute x_n^{B*}(s)
                 b_star = max(T_allowed, key=lambda b: V_prime[(a_star[b], b)])
 
-                # Step 14: value update
+                # Step 18: value update
                 V_star_new[state] = V_prime[(a_star[b_star], b_star)]
 
                 xA_star[(n, state)] = a_star[b_star]
@@ -476,11 +407,9 @@ def solve_SDP(objective="gap"):
     
         V_star = V_star_new
 
-    # return V, xA_star, xB_star
-
     nT = len(T)
 
-    # Step 15: build payoff matrix U'
+    # Step 22: build payoff matrix U'
     U = np.zeros((nT, nT))
 
     g_init = discretize_gap(g1)
@@ -490,7 +419,7 @@ def solve_SDP(objective="gap"):
             s1 = (tA, 0, 0, tB, 0, 0, g_init, 0, 0, 2)
             U[i, j] = V_star[s1] 
 
-    # Step 16: solve zero-sum game via LP   
+    # Step 24: solve zero-sum game via LP   
     # Player B
 
     # Variables: [π_B (nT), ρ]
@@ -873,7 +802,7 @@ def run_simulations_save_csv(experiment_name, objective, tire_set, U, pi_A, pi_B
 
     return df
 
-    def compare_gap(df_gap, df_win):
+def compare_gap(df_gap, df_win):
 
     tstat, pval = ttest_ind(
         df_gap["final_gap"],
