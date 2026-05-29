@@ -46,13 +46,8 @@ g_values = np.arange(g_min, g_max + g_step, g_step)
 l_VSC = 2 # Laps that last a VSC
 l_SC = 3 # Laps that last a SC
 
-r_VSC = 0.3 # Probability of having at least one VSC during the race
-r_SC = 0.3 # Probability of having at least one SC during the race
-
-# r = 1 - (1 - q) ** N
-# q = 1 - (1 - r) ** (1/N)
-q_VSC = 1 - (1 - r_VSC) ** (1/N)
-q_SC = 1 - (1 - r_SC) ** (1/N)
+q_VSC = 0.0177 # Probability of an VSC happening at the end of a lap
+q_SC = 0.0177 # Probability of an SC happening at the end of a lap
 
 k_VSC = 2 # Number of laps needed to be raced after the end of a VSC to enable the DRS
 k_SC = 2 # Number of laps needed to be raced after the end of a SC to enable the DRS
