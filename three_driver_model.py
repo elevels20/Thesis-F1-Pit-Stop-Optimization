@@ -46,6 +46,7 @@ z2 = 0.7
 
 t_drs = 0.5
 
+# Scaling
 SCALE = 0.2
 
 p0 = {k: v * SCALE for k, v in p0.items()}
