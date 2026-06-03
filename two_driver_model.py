@@ -674,13 +674,11 @@ def plot_sample_path(history, gap_history, yellow_history, pit_history):
 
     for i, (yV, yS) in enumerate(yellow_history + [(0, 0)]):  # append dummy to flush last block
         flag = 1 if yV > 0 else (2 if yS > 0 else 0)
-        # end_lap = min(laps[i-1] + 1, N)
 
         if flag != current_flag:
             if current_flag != 0:
                 # Plot the previous block
                 start_lap = laps[start_idx]
-                # end_lap = laps[i]
                 end_lap = min(laps[i-1] + 1, N + 1)
 
                 color = 'yellow' if current_flag == 1 else 'orange'
