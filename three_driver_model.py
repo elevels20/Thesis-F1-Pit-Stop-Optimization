@@ -28,8 +28,6 @@ p0 = {"A":20.2, "B":20.0, "C": 20.4} # Additional lap time for driver A/B/C due 
 lambda_pen = 2.0
 h = 0.02 # Lap time reduction between two consecutive laps attributed to fuel consumption (making the car lighter)
 
-DRS_RANGE = 1.0
-
 delta = 0.4
 
 g_AB1 = -0.4 # Initial time gap between A and B
